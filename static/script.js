@@ -167,11 +167,15 @@ function displayVideoInfo(info) {
     if (info.has_chapters && info.chapters.length > 0) {
         chaptersContainer.style.display = 'block';
         noChapters.style.display = 'none';
+        document.getElementById('download-type-group').style.display = 'block';
+        document.getElementById('chapters-info').style.display = 'block';
         displayChapters(info.chapters);
         updateDownloadInfo();
     } else {
         chaptersContainer.style.display = 'none';
         noChapters.style.display = 'block';
+        document.getElementById('download-type-group').style.display = 'none';
+        document.getElementById('chapters-info').style.display = 'none';
         downloadInfo.textContent = 'Será baixado o vídeo completo';
     }
 }
@@ -229,11 +233,14 @@ function updateDownloadInfo() {
     const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
     const totalCount = checkboxes.length;
     
+    // Atualizar contador
+    document.getElementById('selected-chapters-count').textContent = selectedCount;
+    
     if (selectedCount === 0) {
         downloadInfo.textContent = 'Selecione pelo menos um capítulo';
         downloadBtn.disabled = true;
     } else if (selectedCount === totalCount) {
-        downloadInfo.textContent = 'Será baixado o vídeo completo';
+        downloadInfo.textContent = 'Será baixado o vídeo completo ou capítulos separados (escolha acima)';
         downloadBtn.disabled = false;
     } else {
         downloadInfo.textContent = `Serão baixados ${selectedCount} de ${totalCount} capítulos`;
@@ -257,6 +264,7 @@ async function startDownload() {
     // Obter formato e qualidade selecionados
     const format = document.getElementById('format-select').value;
     const quality = document.getElementById('quality-select').value;
+    const downloadType = document.querySelector('input[name="download-type"]:checked')?.value || 'chapters';
 
     showLoader(downloadBtn);
     videoSection.style.display = 'none';
@@ -274,7 +282,8 @@ async function startDownload() {
                 video_info: currentVideoInfo,
                 selected_chapters: selectedChapters,
                 format: format,
-                quality: quality
+                quality: quality,
+                download_type: downloadType
             })
         });
 

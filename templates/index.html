@@ -61,6 +61,22 @@
                 <!-- Download Options -->
                 <div class="download-options">
                     <h3>⚙️ Opções de Download</h3>
+                    
+                    <!-- Tipo de Download -->
+                    <div class="option-group" id="download-type-group" style="display: none;">
+                        <label>📥 Tipo de Download:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="download-type" value="chapters" checked>
+                                <span>Capítulos Separados</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="download-type" value="complete">
+                                <span>Vídeo Completo</span>
+                            </label>
+                        </div>
+                    </div>
+                    
                     <div class="options-grid">
                         <div class="option-group">
                             <label for="format-select">📁 Formato:</label>
@@ -104,6 +120,11 @@
                             </select>
                         </div>
                     </div>
+                    
+                    <!-- Mostrar info sobre capítulos -->
+                    <p class="info-message" id="chapters-info" style="display: none;">
+                        ✨ Você selecionou <strong id="selected-chapters-count">0</strong> capítulo(s). Selecione o tipo de download acima.
+                    </p>
                 </div>
 
                 <!-- Download Button -->

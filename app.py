@@ -30,16 +30,19 @@ def find_ffmpeg():
         r'C:\Program Files\FFmpeg\bin',
         r'C:\FFmpeg\bin',
         os.path.expanduser(r'~\scoop\apps\ffmpeg\current\bin'),
+        r'C:\Program Files\BtbN\ffmpeg\bin',  # Outro path comum
     ]
     
-    # Procurar em C:\Users\USERNAME\... onde o winget instala
-    user_path = os.path.expanduser('~')
-    ffmpeg_search = glob.glob(os.path.join(user_path, '**', 'ffmpeg-*', 'bin', 'ffmpeg.exe'), recursive=True)
-    if ffmpeg_search:
-        return os.path.dirname(ffmpeg_search[0])
+    # Adicionar PATH do sistema
+    system_path = os.environ.get('PATH', '')
+    for path in system_path.split(os.pathsep):
+        if 'ffmpeg' in path.lower() and os.path.exists(os.path.join(path, 'ffmpeg.exe')):
+            return path
     
+    # Verificar paths conhecidos
     for path in possible_paths:
-        if os.path.exists(os.path.join(path, 'ffmpeg.exe')):
+        ffmpeg_exe = os.path.join(path, 'ffmpeg.exe')
+        if os.path.exists(ffmpeg_exe):
             return path
     
     return None
@@ -160,7 +163,7 @@ def format_time(seconds):
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
-def download_video(url, video_info, selected_chapters, download_id, output_format='mp4', quality='best'):
+def download_video(url, video_info, selected_chapters, download_id, output_format='mp4', quality='best', download_type='chapters'):
     """Baixa o vídeo completo ou capítulos selecionados"""
     try:
         download_status[download_id]['status'] = 'downloading'
@@ -171,20 +174,27 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
         # Construir string de formato baseado na qualidade e formato
         format_string = build_format_string(output_format, quality)
         
-        if not selected_chapters or len(selected_chapters) == len(video_info['chapters']):
-            # Baixar vídeo completo
-            output_path = TEMP_FOLDER / f"{video_title}.{output_format}"
-            
-            ydl_opts = {
-                'format': format_string,
-                'outtmpl': str(output_path),
-                'progress_hooks': [lambda d: update_progress(d, download_id)],
-                'merge_output_format': output_format if output_format in ['mp4', 'mkv', 'webm'] else 'mp4',
-                'noplaylist': True,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-us,en;q=0.5',
+        # Usar download_type para determinar se faz splitting mesmo com todos os capítulos selecionados
+        should_split = (download_type == 'chapters' and 
+                       selected_chapters and 
+                       len(selected_chapters) > 0 and
+                       video_info.get('has_chapters', False))
+        
+        if not should_split or not selected_chapters or len(selected_chapters) == len(video_info['chapters']):
+            if download_type == 'complete' or not should_split:
+                # Baixar vídeo completo
+                output_path = TEMP_FOLDER / f"{video_title}.{output_format}"
+                
+                ydl_opts = {
+                    'format': format_string,
+                    'outtmpl': str(output_path),
+                    'progress_hooks': [lambda d: update_progress(d, download_id)],
+                    'merge_output_format': output_format if output_format in ['mp4', 'mkv', 'webm'] else 'mp4',
+                    'noplaylist': True,
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-us,en;q=0.5',
                     'Sec-Fetch-Mode': 'navigate',
                 },
                 'postprocessors': [] if output_format not in ['mp3', 'm4a', 'wav', 'opus'] else [{
@@ -314,6 +324,7 @@ def start_download():
     selected_chapters = data.get('selected_chapters', [])
     output_format = data.get('format', 'mp4')
     quality = data.get('quality', 'best')
+    download_type = data.get('download_type', 'chapters')  # 'chapters' ou 'complete'
     
     if not url or not video_info:
         return jsonify({'success': False, 'error': 'Dados incompletos'}), 400
@@ -330,7 +341,7 @@ def start_download():
     # Iniciar download em thread separada
     thread = threading.Thread(
         target=download_video,
-        args=(url, video_info, selected_chapters, download_id, output_format, quality)
+        args=(url, video_info, selected_chapters, download_id, output_format, quality, download_type)
     )
     thread.start()
     
