@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Chapter Downloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📹 YouTube Chapter Downloader</h1>
+            <p class="subtitle">Baixe vídeos completos ou capítulos individuais</p>
+        </header>
+
+        <main>
+            <!-- Step 1: URL Input -->
+            <section id="url-section" class="section">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="youtube-url" 
+                        placeholder="Cole a URL do vídeo do YouTube aqui..."
+                        autocomplete="off"
+                    >
+                    <button id="fetch-btn" class="btn btn-primary">
+                        <span class="btn-text">Buscar Vídeo</span>
+                        <span class="loader" style="display: none;"></span>
+                    </button>
+                </div>
+                <p class="hint">Exemplo: https://www.youtube.com/watch?v=dQw4w9WgXcQ</p>
+            </section>
+
+            <!-- Step 2: Video Info & Chapters -->
+            <section id="video-section" class="section" style="display: none;">
+                <div class="video-info">
+                    <img id="video-thumbnail" src="" alt="Video thumbnail" class="thumbnail">
+                    <div class="video-details">
+                        <h2 id="video-title"></h2>
+                        <p class="video-duration">
+                            <span class="icon">⏱️</span>
+                            <span id="video-duration"></span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Chapters List -->
+                <div id="chapters-container" style="display: none;">
+                    <h3>📑 Capítulos Disponíveis</h3>
+                    <div class="chapters-controls">
+                        <button id="select-all-btn" class="btn btn-secondary">Selecionar Todos</button>
+                        <button id="deselect-all-btn" class="btn btn-secondary">Desmarcar Todos</button>
+                    </div>
+                    <div id="chapters-list" class="chapters-list"></div>
+                </div>
+
+                <div id="no-chapters" style="display: none;">
+                    <p class="info-message">ℹ️ Este vídeo não possui capítulos. Você pode baixar o vídeo completo.</p>
+                </div>
+
+                <!-- Download Options -->
+                <div class="download-options">
+                    <h3>⚙️ Opções de Download</h3>
+                    <div class="options-grid">
+                        <div class="option-group">
+                            <label for="format-select">📁 Formato:</label>
+                            <select id="format-select" class="select-input">
+                                <optgroup label="Vídeo">
+                                    <option value="mp4" selected>MP4 (Recomendado)</option>
+                                    <option value="mkv">MKV (Alta qualidade)</option>
+                                    <option value="webm">WebM</option>
+                                    <option value="avi">AVI</option>
+                                </optgroup>
+                                <optgroup label="Áudio">
+                                    <option value="mp3">MP3</option>
+                                    <option value="m4a">M4A (AAC)</option>
+                                    <option value="wav">WAV (Lossless)</option>
+                                    <option value="opus">OPUS</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="option-group">
+                            <label for="quality-select">🎯 Qualidade:</label>
+                            <select id="quality-select" class="select-input">
+                                <!-- Opções de vídeo -->
+                                <optgroup id="video-quality-group" label="Qualidade de Vídeo" style="display: none;">
+                                    <option value="best" selected>Melhor Disponível</option>
+                                    <option value="2160">4K (2160p)</option>
+                                    <option value="1440">2K (1440p)</option>
+                                    <option value="1080">Full HD (1080p)</option>
+                                    <option value="720">HD (720p)</option>
+                                    <option value="480">SD (480p)</option>
+                                    <option value="360">Baixa (360p)</option>
+                                </optgroup>
+                                <!-- Opções de áudio -->
+                                <optgroup id="audio-quality-group" label="Qualidade de Áudio">
+                                    <option value="best" selected>Melhor Disponível</option>
+                                    <option value="320">320 kbps (Máxima)</option>
+                                    <option value="256">256 kbps (Muito Boa)</option>
+                                    <option value="192">192 kbps (Boa)</option>
+                                    <option value="128">128 kbps (Normal)</option>
+                                    <option value="96">96 kbps (Compactada)</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Download Button -->
+                <div class="download-section">
+                    <button id="download-btn" class="btn btn-success btn-large">
+                        <span class="btn-text">⬇️ Baixar</span>
+                        <span class="loader" style="display: none;"></span>
+                    </button>
+                    <p class="download-info" id="download-info"></p>
+                </div>
+            </section>
+
+            <!-- Step 3: Download Progress -->
+            <section id="progress-section" class="section" style="display: none;">
+                <h3>⏳ Processando Download...</h3>
+                <div class="progress-bar-container">
+                    <div id="progress-bar" class="progress-bar"></div>
+                </div>
+                <p id="progress-text" class="progress-text">0%</p>
+                <p id="progress-status" class="progress-status"></p>
+            </section>
+
+            <!-- Step 4: Download Complete -->
+            <section id="complete-section" class="section" style="display: none;">
+                <div class="success-message">
+                    <span class="success-icon">✅</span>
+                    <h3>Download Concluído!</h3>
+                    <div id="download-links"></div>
+                    <button id="new-download-btn" class="btn btn-primary">
+                        Baixar Outro Vídeo
+                    </button>
+                </div>
+            </section>
+
+            <!-- Error Message -->
+            <div id="error-message" class="error-message" style="display: none;"></div>
+        </main>
+
+        <footer>
+            <p>💡 Dica: Nem todos os vídeos do YouTube possuem capítulos. Para vídeos sem capítulos, o vídeo completo será baixado.</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
