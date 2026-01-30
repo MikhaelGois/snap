@@ -138,6 +138,7 @@ def get_video_info(url):
         'extractor_args': {
             'youtube': {
                 'skip_unavailable_videos': True,
+                'player_client': ['web', 'mweb'],  # Tentar múltiplos clientes
             }
         },
         'http_headers': get_default_headers(),
@@ -168,6 +169,44 @@ def get_video_info(url):
                 'has_chapters': len(chapters) > 0
             }
     except Exception as e:
+        error_msg = str(e)
+        print(f"❌ Erro ao extrair vídeo: {error_msg}")
+        
+        # Se o erro for sobre player response, tenta com configuração alternativa
+        if "player response" in error_msg.lower():
+            print("🔄 Tentando com configuração alternativa...")
+            try:
+                ydl_opts_alt = ydl_opts.copy()
+                ydl_opts_alt['extractor_args'] = {
+                    'youtube': {
+                        'skip_unavailable_videos': True,
+                        'player_client': ['android', 'web'],
+                    }
+                }
+                with yt_dlp.YoutubeDL(ydl_opts_alt) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    
+                    chapters = []
+                    if info.get('chapters'):
+                        for idx, chapter in enumerate(info['chapters']):
+                            chapters.append({
+                                'id': idx,
+                                'title': chapter.get('title', f'Capítulo {idx + 1}'),
+                                'start_time': chapter.get('start_time', 0),
+                                'end_time': chapter.get('end_time', info.get('duration', 0))
+                            })
+                    
+                    return {
+                        'success': True,
+                        'title': info.get('title', 'Unknown'),
+                        'duration': info.get('duration', 0),
+                        'thumbnail': info.get('thumbnail', ''),
+                        'chapters': chapters,
+                        'has_chapters': len(chapters) > 0
+                    }
+            except Exception as e2:
+                print(f"❌ Também falhou com alternativa: {e2}")
+        
         return {
             'success': False,
             'error': str(e)
