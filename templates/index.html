@@ -3,189 +3,254 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Chapter Downloader</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Video Splitter Downloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style_modern.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="header-content">
-                <div>
-                    <h1>📹 Video Splitter Downloader</h1>
-                    <p class="subtitle">Baixe vídeos completos ou capítulos individuais</p>
+    <div class="wrapper">
+        <!-- HEADER MODERNIZADO -->
+        <header class="header">
+            <div class="header-wrapper">
+                <div class="logo-section">
+                    <div class="logo-icon">🎬</div>
+                    <div>
+                        <h1>Video Splitter Downloader</h1>
+                        <p class="tagline">Baixe, divida e organize seus vídeos favoritos</p>
+                    </div>
                 </div>
-                <button id="history-btn" class="btn btn-secondary" onclick="toggleHistory()">
-                    📜 Histórico
-                </button>
+                <div class="header-actions">
+                    <button id="history-btn" class="btn btn-icon" onclick="toggleHistory()" title="Histórico">
+                        <span>📜</span>
+                        <span class="badge-count" id="history-count" style="display: none;">0</span>
+                    </button>
+                </div>
             </div>
         </header>
 
-        <main>
-            <!-- Step 1: URL Input -->
-            <section id="url-section" class="section">
-                <div class="input-group">
-                    <input 
-                        type="text" 
-                        id="youtube-url" 
-                        placeholder="Cole a URL do vídeo do YouTube aqui..."
-                        autocomplete="off"
-                    >
-                    <button id="fetch-btn" class="btn btn-primary">
-                        <span class="btn-text">Buscar Vídeo</span>
-                        <span class="loader" style="display: none;"></span>
-                    </button>
-                </div>
-                <p class="hint">Exemplo: https://www.youtube.com/watch?v=dQw4w9WgXcQ</p>
-            </section>
+        <main class="container">
 
-            <!-- Step 2: Video Info & Chapters -->
-            <section id="video-section" class="section" style="display: none;">
-                <div class="video-info">
-                    <img id="video-thumbnail" src="" alt="Video thumbnail" class="thumbnail">
-                    <div class="video-details">
-                        <h2 id="video-title"></h2>
-                        <p class="video-duration">
-                            <span class="icon">⏱️</span>
-                            <span id="video-duration"></span>
-                        </p>
+            <!-- SEÇÃO 1: URL INPUT -->
+            <section class="section input-section">
+                <div class="section-header">
+                    <h2>🔗 Cole a URL do Vídeo</h2>
+                </div>
+                <div class="input-wrapper">
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="youtube-url" 
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <button id="fetch-btn" class="btn btn-primary">
+                            <span class="btn-content">
+                                <span class="btn-icon">↓</span>
+                                <span class="btn-text">Buscar</span>
+                            </span>
+                            <span class="loader hidden"></span>
+                        </button>
                     </div>
-                </div>
-
-                <!-- Chapters List -->
-                <div id="chapters-container" style="display: none;">
-                    <h3>📑 Capítulos Disponíveis</h3>
-                    <div class="chapters-controls">
-                        <button id="select-all-btn" class="btn btn-secondary">Selecionar Todos</button>
-                        <button id="deselect-all-btn" class="btn btn-secondary">Desmarcar Todos</button>
-                    </div>
-                    <div id="chapters-list" class="chapters-list"></div>
-                </div>
-
-                <div id="no-chapters" style="display: none;">
-                    <p class="info-message">ℹ️ Este vídeo não possui capítulos. Você pode baixar o vídeo completo.</p>
-                </div>
-
-                <!-- Download Options -->
-                <div class="download-options">
-                    <h3>⚙️ Opções de Download</h3>
-                    
-                    <!-- Tipo de Download -->
-                    <div class="option-group" id="download-type-group" style="display: none;">
-                        <label>📥 Tipo de Download:</label>
-                        <div class="radio-group">
-                            <label class="radio-label">
-                                <input type="radio" name="download-type" value="chapters" checked>
-                                <span>Capítulos Separados</span>
-                            </label>
-                            <label class="radio-label">
-                                <input type="radio" name="download-type" value="complete">
-                                <span>Vídeo Completo</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="options-grid">
-                        <div class="option-group">
-                            <label for="format-select">📁 Formato:</label>
-                            <select id="format-select" class="select-input">
-                                <optgroup label="Vídeo">
-                                    <option value="mp4" selected>MP4 (Recomendado)</option>
-                                    <option value="mkv">MKV (Alta qualidade)</option>
-                                    <option value="webm">WebM</option>
-                                    <option value="avi">AVI</option>
-                                </optgroup>
-                                <optgroup label="Áudio">
-                                    <option value="mp3">MP3</option>
-                                    <option value="m4a">M4A (AAC)</option>
-                                    <option value="wav">WAV (Lossless)</option>
-                                    <option value="opus">OPUS</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        <div class="option-group">
-                            <label for="quality-select">🎯 Qualidade:</label>
-                            <select id="quality-select" class="select-input">
-                                <!-- Opções de vídeo -->
-                                <optgroup id="video-quality-group" label="Qualidade de Vídeo" style="display: none;">
-                                    <option value="best" selected>Melhor Disponível</option>
-                                    <option value="2160">4K (2160p)</option>
-                                    <option value="1440">2K (1440p)</option>
-                                    <option value="1080">Full HD (1080p)</option>
-                                    <option value="720">HD (720p)</option>
-                                    <option value="480">SD (480p)</option>
-                                    <option value="360">Baixa (360p)</option>
-                                </optgroup>
-                                <!-- Opções de áudio -->
-                                <optgroup id="audio-quality-group" label="Qualidade de Áudio">
-                                    <option value="best" selected>Melhor Disponível</option>
-                                    <option value="320">320 kbps (Máxima)</option>
-                                    <option value="256">256 kbps (Muito Boa)</option>
-                                    <option value="192">192 kbps (Boa)</option>
-                                    <option value="128">128 kbps (Normal)</option>
-                                    <option value="96">96 kbps (Compactada)</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- Mostrar info sobre capítulos selecionados -->
-                    <p class="info-message" id="chapters-info" style="display: none;">
-                        ✨ Você selecionou <strong id="selected-chapters-count">0</strong> capítulo(s).
-                    </p>
-                </div>
-
-                <!-- Download Button -->
-                <div class="download-section">
-                    <button id="download-btn" class="btn btn-success btn-large">
-                        <span class="btn-text">⬇️ Baixar</span>
-                        <span class="loader" style="display: none;"></span>
-                    </button>
-                    <p class="download-info" id="download-info"></p>
+                    <p class="hint">Suporta: YouTube, Vimeo, Dailymotion, SoundCloud e 1000+ sites</p>
                 </div>
             </section>
 
-            <!-- Step 3: Download Progress -->
-            <section id="progress-section" class="section" style="display: none;">
-                <h3>⏳ Processando Download...</h3>
-                <div class="progress-bar-container">
-                    <div id="progress-bar" class="progress-bar"></div>
+            <!-- SEÇÃO 2: INFO DO VÍDEO -->
+            <section id="video-section" class="section video-section hidden">
+                <div class="video-card">
+                    <div class="video-header">
+                        <div class="thumbnail-wrapper">
+                            <img id="video-thumbnail" src="" alt="Video thumbnail" class="thumbnail">
+                            <div class="playlist-badge hidden" id="playlist-badge">
+                                <span id="playlist-count">0</span> vídeos
+                            </div>
+                            <div class="site-badge" id="site-badge">YouTube</div>
+                        </div>
+                        <div class="video-meta">
+                            <h2 id="video-title"></h2>
+                            <div class="video-info-row">
+                                <span class="info-item">
+                                    <span class="icon">⏱️</span>
+                                    <span id="video-duration">00:00</span>
+                                </span>
+                                <span class="info-item">
+                                    <span class="icon">📊</span>
+                                    <span id="video-size">-</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PLAYER INTEGRADO -->
+                    <div class="player-section hidden" id="player-section">
+                        <h3>▶️ Player</h3>
+                        <div class="player-container">
+                            <video id="video-player" controls></video>
+                            <audio id="audio-player" controls></audio>
+                            <div id="player-placeholder" class="player-placeholder">
+                                <p>📁 Downloads aparecerão aqui</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CAPÍTULOS -->
+                    <div id="chapters-container" class="chapters-section hidden">
+                        <div class="section-header">
+                            <h3>📑 Capítulos Disponíveis</h3>
+                            <span class="chapter-count" id="chapter-count">0</span>
+                        </div>
+                        <div class="chapters-toolbar">
+                            <button id="select-all-btn" class="btn btn-sm btn-secondary">✓ Todos</button>
+                            <button id="deselect-all-btn" class="btn btn-sm btn-secondary">✕ Nenhum</button>
+                        </div>
+                        <div id="chapters-list" class="chapters-list"></div>
+                    </div>
+
+                    <div id="no-chapters" class="info-banner hidden">
+                        <span>ℹ️</span>
+                        <p>Este vídeo não possui capítulos. Você pode baixar o vídeo completo.</p>
+                    </div>
+
+                    <!-- OPÇÕES DE DOWNLOAD -->
+                    <div class="download-options">
+                        <h3>⚙️ Opções de Download</h3>
+                        
+                        <!-- Playlist Options -->
+                        <div class="option-group hidden" id="playlist-options">
+                            <label>🎵 Playlist:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="playlist-type" value="single" checked>
+                                    <span>Este Vídeo</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="playlist-type" value="all">
+                                    <span>Toda a Playlist</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Download Type -->
+                        <div class="option-group" id="download-type-group">
+                            <label>📥 Tipo de Download:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="download-type" value="chapters" checked>
+                                    <span>Capítulos Separados</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="download-type" value="complete">
+                                    <span>Vídeo Completo</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="options-grid">
+                            <div class="option-group">
+                                <label for="format-select">📁 Formato:</label>
+                                <select id="format-select" class="select-input">
+                                    <optgroup label="🎥 Vídeo">
+                                        <option value="mp4" selected>MP4 (Recomendado)</option>
+                                        <option value="mkv">MKV (Alta qualidade)</option>
+                                        <option value="webm">WebM</option>
+                                        <option value="avi">AVI</option>
+                                    </optgroup>
+                                    <optgroup label="🎵 Áudio">
+                                        <option value="mp3">MP3</option>
+                                        <option value="m4a">M4A (AAC)</option>
+                                        <option value="wav">WAV (Lossless)</option>
+                                        <option value="opus">Opus</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+
+                            <div class="option-group">
+                                <label for="quality-select">🎬 Qualidade:</label>
+                                <select id="quality-select" class="select-input">
+                                    <option value="best">Melhor Disponível</option>
+                                    <option value="2160">2160p (4K)</option>
+                                    <option value="1440">1440p (QHD)</option>
+                                    <option value="1080">1080p (Full HD)</option>
+                                    <option value="720">720p (HD)</option>
+                                    <option value="480">480p</option>
+                                    <option value="360">360p</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- INFO DE DOWNLOAD -->
+                    <div id="download-info" class="download-info"></div>
+
+                    <!-- BOTÕES DE AÇÃO -->
+                    <div class="action-buttons">
+                        <button id="download-btn" class="btn btn-success btn-large">
+                            <span>⬇️</span>
+                            <span>Baixar Agora</span>
+                        </button>
+                    </div>
                 </div>
-                <p id="progress-text" class="progress-text">0%</p>
-                <p id="progress-status" class="progress-status"></p>
             </section>
 
-            <!-- Step 4: Download Complete -->
-            <section id="complete-section" class="section" style="display: none;">
-                <div class="success-message">
-                    <span class="success-icon">✅</span>
-                    <h3>Download Concluído!</h3>
-                    <div id="download-links"></div>
+            <!-- SEÇÃO 3: PROGRESSO -->
+            <section id="progress-section" class="section progress-section hidden">
+                <div class="progress-card">
+                    <div class="progress-header">
+                        <h3>📥 Baixando...</h3>
+                        <span id="progress-status" class="status-badge">Iniciando</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar-bg">
+                            <div id="progress-bar" class="progress-bar"></div>
+                        </div>
+                        <div class="progress-text">
+                            <span id="progress-text">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SEÇÃO 4: DOWNLOADS COMPLETOS -->
+            <section id="complete-section" class="section complete-section hidden">
+                <div class="success-card">
+                    <div class="success-header">
+                        <span class="success-icon">✅</span>
+                        <h3>Arquivos Prontos!</h3>
+                    </div>
+                    <div id="download-links" class="download-links"></div>
                     <button id="new-download-btn" class="btn btn-primary">
-                        Baixar Outro Vídeo
+                        <span>+</span>
+                        <span>Novo Download</span>
                     </button>
                 </div>
             </section>
 
-            <!-- Error Message -->
-            <div id="error-message" class="error-message" style="display: none;"></div>
-
-            <!-- History Section -->
-            <section id="history-section" class="section" style="display: none;">
+            <!-- SEÇÃO 5: HISTÓRICO -->
+            <section id="history-section" class="section history-section hidden">
                 <div class="section-header">
                     <h2>📜 Histórico de Downloads</h2>
-                    <button class="btn btn-secondary btn-sm" onclick="clearHistory()">🗑️ Limpar</button>
+                    <button class="btn btn-sm btn-danger" onclick="clearHistory()">🗑️ Limpar</button>
                 </div>
-                <div id="history-list" class="history-list">
-                    <!-- Histórico será carregado aqui -->
-                </div>
+                <div id="history-list" class="history-list"></div>
             </section>
+
+            <!-- MENSAGENS DE ERRO -->
+            <div id="error-message" class="error-message hidden"></div>
         </main>
 
-        <footer>
-            <p>💡 Dica: Nem todos os vídeos do YouTube possuem capítulos. Para vídeos sem capítulos, o vídeo completo será baixado.</p>
-            <p>🌍 Suporta: YouTube, Vimeo, Dailymotion e mais de 1000 sites!</p>
+        <!-- FOOTER -->
+        <footer class="footer">
+            <p>🌍 Suporta: YouTube, Vimeo, Dailymotion, SoundCloud e mais de 1000 sites</p>
+            <p class="footer-note">💾 Downloads salvos em: <code>downloads/</code></p>
         </footer>
     </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>

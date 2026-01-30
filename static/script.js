@@ -32,10 +32,31 @@ const historySection = document.getElementById('history-section');
 const historyList = document.getElementById('history-list');
 const videoQualityGroup = document.getElementById('video-quality-group');
 const audioQualityGroup = document.getElementById('audio-quality-group');
+const playerSection = document.getElementById('player-section');
+const videoPlayer = document.getElementById('video-player');
+const audioPlayer = document.getElementById('audio-player');
+const playlistBadge = document.getElementById('playlist-badge');
+const playlistCount = document.getElementById('playlist-count');
+const siteBadge = document.getElementById('site-badge');
+const historyBtn = document.getElementById('history-btn');
+const historyCountBadge = document.querySelector('.badge-count');
 
 // Formatos de áudio e vídeo
 const audioFormats = ['mp3', 'm4a', 'wav', 'opus'];
 const videoFormats = ['mp4', 'mkv', 'webm', 'avi'];
+
+// Mapeamento de cores de sites
+const siteBadgeColors = {
+    'youtube': '#FF0000',
+    'youtubemusic': '#FF0000',
+    'vimeo': '#1AB7EA',
+    'dailymotion': '#00A8E1',
+    'soundcloud': '#FF7700',
+    'spotify': '#1DB954',
+    'twitch': '#9146FF',
+    'instagram': '#E4405F',
+    'tiktok': '#000000'
+};
 
 // Event Listeners
 fetchBtn.addEventListener('click', fetchVideoInfo);
@@ -47,6 +68,10 @@ deselectAllBtn.addEventListener('click', () => toggleAllChapters(false));
 downloadBtn.addEventListener('click', startDownload);
 newDownloadBtn.addEventListener('click', resetApp);
 formatSelect.addEventListener('change', updateQualityOptions);
+if (historyBtn) historyBtn.addEventListener('click', toggleHistory);
+
+// Carregar histórico ao iniciar
+loadHistoryCount();
 
 // Funções
 function updateQualityOptions() {
@@ -162,6 +187,21 @@ function displayVideoInfo(info) {
     videoThumbnail.src = info.thumbnail;
     videoTitle.textContent = info.title;
     videoDuration.textContent = formatDuration(info.duration);
+    
+    // Exibir Badge do Site
+    const siteExtractor = (info.extractor || 'youtube').toLowerCase();
+    siteBadge.textContent = siteExtractor.toUpperCase().replace(/_/g, ' ');
+    const siteColor = siteBadgeColors[siteExtractor] || '#FF6B35';
+    siteBadge.style.background = siteColor;
+    siteBadge.style.display = 'flex';
+    
+    // Exibir Badge de Playlist
+    if (info.is_playlist) {
+        playlistBadge.classList.remove('hidden');
+        playlistCount.textContent = info.playlist_count || 'múltiplos';
+    } else {
+        playlistBadge.classList.add('hidden');
+    }
     
     videoSection.style.display = 'block';
 
@@ -345,14 +385,43 @@ function showDownloadComplete(files) {
     
     files.forEach(filePath => {
         const fileName = filePath.split('\\').pop().split('/').pop();
+        const wrapper = document.createElement('div');
+        wrapper.className = 'download-link-wrapper';
+        wrapper.style.display = 'flex';
+        wrapper.style.gap = '1rem';
+        wrapper.style.alignItems = 'center';
+        
         const link = document.createElement('a');
         link.href = `/api/download-file/${encodeURIComponent(fileName)}`;
         link.className = 'download-link';
-        link.textContent = `📥 ${fileName}`;
-        link.download = fileName; // Força o download
-        link.target = '_blank'; // Abre em nova aba se necessário
-        downloadLinks.appendChild(link);
+        link.style.flex = '1';
+        link.innerHTML = `
+            <span class="download-link-name">📥 ${fileName}</span>
+            <span class="download-link-icon">⬇️</span>
+        `;
+        link.download = fileName;
+        link.target = '_blank';
+        
+        const playBtn = document.createElement('button');
+        playBtn.className = 'btn btn-secondary btn-sm';
+        playBtn.innerHTML = '▶️ Reproduzir';
+        playBtn.onclick = (e) => {
+            e.preventDefault();
+            playDownload(filePath);
+        };
+        
+        wrapper.appendChild(link);
+        wrapper.appendChild(playBtn);
+        downloadLinks.appendChild(wrapper);
     });
+    
+    // Reproduzir o primeiro arquivo automaticamente
+    if (files.length > 0) {
+        playDownload(files[0]);
+    }
+    
+    // Recarregar contagem do histórico
+    loadHistoryCount();
 }
 
 function resetApp() {
@@ -461,6 +530,54 @@ async function clearHistory() {
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('📹 YouTube Chapter Downloader carregado!');
+    console.log('📹 Video Splitter Downloader carregado!');
     console.log('🌍 Suporta YouTube, Vimeo, Dailymotion e mais de 1000 sites!');
+    loadHistoryCount();
 });
+
+// Funções de Player
+function playDownload(filePath) {
+    const filename = filePath.split('\\').pop().split('/').pop();
+    const ext = filename.split('.').pop().toLowerCase();
+    
+    // Detectar tipo de arquivo
+    const audioExtensions = ['mp3', 'm4a', 'wav', 'opus', 'aac', 'flac'];
+    const videoExtensions = ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv'];
+    
+    const isAudio = audioExtensions.includes(ext);
+    const isVideo = videoExtensions.includes(ext);
+    
+    if (isAudio) {
+        audioPlayer.src = `/api/download-file/${encodeURIComponent(filename)}`;
+        audioPlayer.style.display = 'block';
+        videoPlayer.style.display = 'none';
+        playerSection.classList.remove('hidden');
+        audioPlayer.play().catch(e => console.error('Erro ao reproduzir áudio:', e));
+    } else if (isVideo) {
+        videoPlayer.src = `/api/download-file/${encodeURIComponent(filename)}`;
+        videoPlayer.style.display = 'block';
+        audioPlayer.style.display = 'none';
+        playerSection.classList.remove('hidden');
+        videoPlayer.play().catch(e => console.error('Erro ao reproduzir vídeo:', e));
+    }
+    
+    // Scroll suave até o player
+    playerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Carregar contagem de histórico
+async function loadHistoryCount() {
+    try {
+        const response = await fetch('/api/history');
+        const data = await response.json();
+        
+        if (data.success && data.history.length > 0 && historyCountBadge) {
+            historyCountBadge.textContent = data.history.length;
+            historyCountBadge.style.display = 'flex';
+        } else if (historyCountBadge) {
+            historyCountBadge.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Erro ao carregar contagem do histórico:', error);
+    }
+}
