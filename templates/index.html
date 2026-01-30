@@ -9,8 +9,15 @@
 <body>
     <div class="container">
         <header>
-            <h1>📹 YouTube Chapter Downloader</h1>
-            <p class="subtitle">Baixe vídeos completos ou capítulos individuais</p>
+            <div class="header-content">
+                <div>
+                    <h1>📹 Video Splitter Downloader</h1>
+                    <p class="subtitle">Baixe vídeos completos ou capítulos individuais</p>
+                </div>
+                <button id="history-btn" class="btn btn-secondary" onclick="toggleHistory()">
+                    📜 Histórico
+                </button>
+            </div>
         </header>
 
         <main>
@@ -121,9 +128,9 @@
                         </div>
                     </div>
                     
-                    <!-- Mostrar info sobre capítulos -->
+                    <!-- Mostrar info sobre capítulos selecionados -->
                     <p class="info-message" id="chapters-info" style="display: none;">
-                        ✨ Você selecionou <strong id="selected-chapters-count">0</strong> capítulo(s). Selecione o tipo de download acima.
+                        ✨ Você selecionou <strong id="selected-chapters-count">0</strong> capítulo(s).
                     </p>
                 </div>
 
@@ -161,10 +168,22 @@
 
             <!-- Error Message -->
             <div id="error-message" class="error-message" style="display: none;"></div>
+
+            <!-- History Section -->
+            <section id="history-section" class="section" style="display: none;">
+                <div class="section-header">
+                    <h2>📜 Histórico de Downloads</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="clearHistory()">🗑️ Limpar</button>
+                </div>
+                <div id="history-list" class="history-list">
+                    <!-- Histórico será carregado aqui -->
+                </div>
+            </section>
         </main>
 
         <footer>
             <p>💡 Dica: Nem todos os vídeos do YouTube possuem capítulos. Para vídeos sem capítulos, o vídeo completo será baixado.</p>
+            <p>🌍 Suporta: YouTube, Vimeo, Dailymotion e mais de 1000 sites!</p>
         </footer>
     </div>
 

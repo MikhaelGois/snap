@@ -28,6 +28,8 @@ const newDownloadBtn = document.getElementById('new-download-btn');
 const errorMessage = document.getElementById('error-message');
 const formatSelect = document.getElementById('format-select');
 const qualitySelect = document.getElementById('quality-select');
+const historySection = document.getElementById('history-section');
+const historyList = document.getElementById('history-list');
 const videoQualityGroup = document.getElementById('video-quality-group');
 const audioQualityGroup = document.getElementById('audio-quality-group');
 
@@ -167,15 +169,11 @@ function displayVideoInfo(info) {
     if (info.has_chapters && info.chapters.length > 0) {
         chaptersContainer.style.display = 'block';
         noChapters.style.display = 'none';
-        document.getElementById('download-type-group').style.display = 'block';
-        document.getElementById('chapters-info').style.display = 'block';
         displayChapters(info.chapters);
         updateDownloadInfo();
     } else {
         chaptersContainer.style.display = 'none';
         noChapters.style.display = 'block';
-        document.getElementById('download-type-group').style.display = 'none';
-        document.getElementById('chapters-info').style.display = 'none';
         downloadInfo.textContent = 'Será baixado o vídeo completo';
     }
 }
@@ -233,14 +231,11 @@ function updateDownloadInfo() {
     const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
     const totalCount = checkboxes.length;
     
-    // Atualizar contador
-    document.getElementById('selected-chapters-count').textContent = selectedCount;
-    
     if (selectedCount === 0) {
         downloadInfo.textContent = 'Selecione pelo menos um capítulo';
         downloadBtn.disabled = true;
     } else if (selectedCount === totalCount) {
-        downloadInfo.textContent = 'Será baixado o vídeo completo ou capítulos separados (escolha acima)';
+        downloadInfo.textContent = 'Será baixado o vídeo completo';
         downloadBtn.disabled = false;
     } else {
         downloadInfo.textContent = `Serão baixados ${selectedCount} de ${totalCount} capítulos`;
@@ -351,10 +346,11 @@ function showDownloadComplete(files) {
     files.forEach(filePath => {
         const fileName = filePath.split('\\').pop().split('/').pop();
         const link = document.createElement('a');
-        link.href = `/api/download-file/${fileName}`;
+        link.href = `/api/download-file/${encodeURIComponent(fileName)}`;
         link.className = 'download-link';
         link.textContent = `📥 ${fileName}`;
-        link.download = fileName;
+        link.download = fileName; // Força o download
+        link.target = '_blank'; // Abre em nova aba se necessário
         downloadLinks.appendChild(link);
     });
 }
@@ -373,3 +369,98 @@ function resetApp() {
     progressBar.style.width = '0%';
     progressText.textContent = '0%';
 }
+
+// Funções do Histórico
+async function toggleHistory() {
+    if (historySection.style.display === 'none') {
+        await loadHistory();
+        historySection.style.display = 'block';
+        // Scroll suave até o histórico
+        historySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+        historySection.style.display = 'none';
+    }
+}
+
+async function loadHistory() {
+    try {
+        const response = await fetch('/api/history');
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error('Erro ao carregar histórico');
+        }
+        
+        if (data.history.length === 0) {
+            historyList.innerHTML = '<p class="no-history">📭 Nenhum download no histórico</p>';
+            return;
+        }
+        
+        // Renderizar histórico (mais recente primeiro)
+        historyList.innerHTML = data.history.reverse().map(item => {
+            const filesHtml = item.files.map(file => {
+                const filename = file.split('\\').pop().split('/').pop();
+                return `<a href="/api/download-file/${encodeURIComponent(filename)}" class="file-link" download="${filename}">📥 ${filename}</a>`;
+            }).join('');
+            
+            return `
+                <div class="history-item">
+                    <div class="history-header">
+                        <h4>🎬 ${item.title}</h4>
+                        <span class="history-date">📅 ${item.timestamp}</span>
+                    </div>
+                    <p class="history-info">
+                        <strong>Formato:</strong> ${item.format.toUpperCase()} | 
+                        <strong>Qualidade:</strong> ${item.quality} | 
+                        <strong>Arquivos:</strong> ${item.files.length}
+                    </p>
+                    <div class="history-files">
+                        ${filesHtml}
+                    </div>
+                    <p class="history-url"><strong>URL:</strong> <a href="${item.url}" target="_blank">${item.url}</a></p>
+                </div>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('Erro ao carregar histórico:', error);
+        showError('Erro ao carregar histórico: ' + error.message);
+    }
+}
+
+async function clearHistory() {
+    if (!confirm('⚠️ Tem certeza que deseja limpar todo o histórico de downloads?\n\nEsta ação não pode ser desfeita.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/history/clear', {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error('Erro ao limpar histórico');
+        }
+        
+        // Recarregar histórico vazio
+        await loadHistory();
+        
+        // Feedback visual
+        showError('✅ Histórico limpo com sucesso!');
+        setTimeout(() => {
+            errorMessage.style.display = 'none';
+        }, 3000);
+        
+    } catch (error) {
+        console.error('Erro ao limpar histórico:', error);
+        showError('❌ Erro ao limpar histórico: ' + error.message);
+    }
+}
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📹 YouTube Chapter Downloader carregado!');
+    console.log('🌍 Suporta YouTube, Vimeo, Dailymotion e mais de 1000 sites!');
+});

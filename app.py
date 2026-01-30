@@ -8,6 +8,8 @@ from pathlib import Path
 import threading
 import time
 import glob
+import json
+import tempfile
 import tempfile
 import shutil
 from io import BytesIO
@@ -16,118 +18,90 @@ app = Flask(__name__)
 CORS(app)
 
 # Configuração de diretórios
-TEMP_FOLDER = Path(tempfile.gettempdir()) / 'youtube_downloader'
-TEMP_FOLDER.mkdir(exist_ok=True)
+DOWNLOAD_FOLDER = Path(__file__).parent / 'downloads'
+DOWNLOAD_FOLDER.mkdir(exist_ok=True)
 
-# Rate limiting para YouTube
-last_request_time = 0
-REQUEST_DELAY = 2  # segundos entre requisições
-
-# Remover DOWNLOAD_FOLDER (agora usando temp)
 download_files = {}
 
 # Tentar encontrar o FFmpeg instalado pelo winget
 def find_ffmpeg():
-    """Localiza o FFmpeg instalado no sistema"""
+    """Localiza o FFmpeg instalado no sistema ou usa yt-dlp bundled"""
+    # Primeiro, verificar se ffmpeg está no PATH
+    import shutil
+    ffmpeg_path = shutil.which('ffmpeg')
+    if ffmpeg_path:
+        return os.path.dirname(ffmpeg_path)
+    
     possible_paths = [
+        r'C:\ffmpeg\ffmpeg-master-latest-win64-gpl\bin',  # Instalação manual
         r'C:\ProgramData\chocolatey\bin',
         r'C:\Program Files\FFmpeg\bin',
         r'C:\FFmpeg\bin',
         os.path.expanduser(r'~\scoop\apps\ffmpeg\current\bin'),
-        r'C:\Program Files\BtbN\ffmpeg\bin',  # Outro path comum
+        r'C:\Program Files\BtbN\ffmpeg\bin',
+        os.path.expanduser(r'~\AppData\Local\Microsoft\WinGet\Packages'),
     ]
     
     # Adicionar PATH do sistema
     system_path = os.environ.get('PATH', '')
     for path in system_path.split(os.pathsep):
-        if 'ffmpeg' in path.lower() and os.path.exists(os.path.join(path, 'ffmpeg.exe')):
-            return path
+        if 'ffmpeg' in path.lower():
+            ffmpeg_exe = os.path.join(path, 'ffmpeg.exe')
+            if os.path.exists(ffmpeg_exe):
+                return path
     
     # Verificar paths conhecidos
     for path in possible_paths:
-        ffmpeg_exe = os.path.join(path, 'ffmpeg.exe')
-        if os.path.exists(ffmpeg_exe):
-            return path
+        if os.path.exists(path):
+            # Buscar recursivamente apenas 2 níveis
+            for root, dirs, files in os.walk(path):
+                if 'ffmpeg.exe' in files:
+                    return root
+                if root.count(os.sep) - path.count(os.sep) >= 2:
+                    del dirs[:]  # Não descer mais
     
     return None
 
 # Configurar caminho do FFmpeg
 FFMPEG_PATH = find_ffmpeg()
+FFMPEG_LOCATION = None
+
 if FFMPEG_PATH:
     print(f"✅ FFmpeg encontrado em: {FFMPEG_PATH}")
+    FFMPEG_LOCATION = os.path.join(FFMPEG_PATH, 'ffmpeg.exe')
     os.environ['PATH'] = FFMPEG_PATH + os.pathsep + os.environ['PATH']
 else:
-    print("⚠️ FFmpeg não encontrado. Algumas funcionalidades podem não funcionar.")
+    print("⚠️ FFmpeg não encontrado no sistema.")
+    print("ℹ️  Tentando usar FFmpeg bundled do yt-dlp...")
+    # yt-dlp pode usar seu próprio FFmpeg interno
+    FFMPEG_LOCATION = None
 
 # Armazenar status de downloads em memória
 download_status = {}
 
-def cleanup_old_files():
-    """Limpa arquivos temporários antigos (mais de 1 hora)"""
+# Histórico de downloads (persistente)
+DOWNLOAD_HISTORY_FILE = DOWNLOAD_FOLDER / 'history.json'
+download_history = []
+
+def load_download_history():
+    """Carrega histórico de downloads"""
+    global download_history
     try:
-        import datetime
-        now = time.time()
-        for filepath in TEMP_FOLDER.glob('*'):
-            if os.path.isfile(filepath):
-                if now - os.path.getctime(filepath) > 3600:  # 1 hora
-                    try:
-                        os.remove(filepath)
-                    except:
-                        pass
+        if DOWNLOAD_HISTORY_FILE.exists():
+            with open(DOWNLOAD_HISTORY_FILE, 'r', encoding='utf-8') as f:
+                download_history = json.load(f)
     except:
-        pass
+        download_history = []
 
-# Limpar arquivos ao iniciar
-cleanup_old_files()
+def save_download_history():
+    """Salva histórico de downloads"""
+    try:
+        with open(DOWNLOAD_HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(download_history[-100:], f, ensure_ascii=False, indent=2)  # Últimos 100
+    except Exception as e:
+        print(f"Erro ao salvar histórico: {e}")
 
-def apply_rate_limit():
-    """Aplica delay entre requisições para evitar rate limiting"""
-    global last_request_time
-    now = time.time()
-    elapsed = now - last_request_time
-    
-    if elapsed < REQUEST_DELAY:
-        wait_time = REQUEST_DELAY - elapsed
-        print(f"⏸️  Rate limit: aguardando {wait_time:.1f}s...")
-        time.sleep(wait_time)
-    
-    last_request_time = time.time()
-
-def extract_with_retry(url, ydl_opts, max_retries=3):
-    """Tenta extrair vídeo com retry exponencial"""
-    for attempt in range(max_retries):
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                return ydl.extract_info(url, download=False)
-        except Exception as e:
-            if attempt < max_retries - 1:
-                wait_time = 2 ** (attempt + 1)  # 2, 4, 8 segundos
-                print(f"  ⚠️  Tentativa {attempt + 1} falhou. Aguardando {wait_time}s antes da próxima...")
-                time.sleep(wait_time)
-            else:
-                raise e
-
-def get_default_headers():
-    """Retorna headers padrão para requisições"""
-    return {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Cache-Control': 'max-age=0',
-        'Referer': 'https://www.youtube.com/',
-        'Origin': 'https://www.youtube.com',
-        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="130", "Google Chrome";v="130"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"',
-    }
+load_download_history()
 
 def sanitize_filename(filename):
     """Remove caracteres inválidos do nome do arquivo"""
@@ -161,149 +135,56 @@ def build_format_string(output_format, quality):
         else:
             return f'bestvideo[height<={height}]+bestaudio/best[height<={height}]'
 
-def get_video_info(url):
-    """Extrai informações do vídeo incluindo capítulos"""
+def get_video_info(url, extract_playlist=False):
+    """Extrai informações do vídeo/playlist incluindo capítulos"""
     print(f"🔍 Buscando informações para: {url}")
     ydl_opts = {
         'quiet': False,
         'no_warnings': False,
-        'extract_flat': False,
+        'extract_flat': 'in_playlist' if extract_playlist else False,
         'skip_download': True,
-        'socket_timeout': 60,
-        'noplaylist': True,
-        'retries': 5,
-        'extractor_args': {
-            'youtube': {
-                'skip_unavailable_videos': True,
-                'player_client': ['web', 'mweb'],  # Tentar múltiplos clientes
-            }
+        'socket_timeout': 30,
+        'noplaylist': not extract_playlist,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
         },
-        'http_headers': get_default_headers(),
     }
     
     try:
-        apply_rate_limit()
-        print("⏳ Extraindo informações do vídeo...")
-        info = extract_with_retry(url, ydl_opts, max_retries=3)
-        print("✅ Informações extraídas com sucesso!")
-        
-        chapters = []
-        if info.get('chapters'):
-            for idx, chapter in enumerate(info['chapters']):
-                chapters.append({
-                    'id': idx,
-                    'title': chapter.get('title', f'Capítulo {idx + 1}'),
-                    'start_time': chapter.get('start_time', 0),
-                    'end_time': chapter.get('end_time', info.get('duration', 0))
-                })
-        
-        return {
-            'success': True,
-            'title': info.get('title', 'Unknown'),
-            'duration': info.get('duration', 0),
-            'thumbnail': info.get('thumbnail', ''),
-            'chapters': chapters,
-            'has_chapters': len(chapters) > 0
-        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            print("⏳ Extraindo informações do vídeo...")
+            info = ydl.extract_info(url, download=False)
+            print("✅ Informações extraídas com sucesso!")
+            
+            chapters = []
+            if info.get('chapters'):
+                for idx, chapter in enumerate(info['chapters']):
+                    chapters.append({
+                        'id': idx,
+                        'title': chapter.get('title', f'Capítulo {idx + 1}'),
+                        'start_time': chapter.get('start_time', 0),
+                        'end_time': chapter.get('end_time', info.get('duration', 0))
+                    })
+            
+            # Detectar se é playlist
+            is_playlist = info.get('_type') == 'playlist'
+            playlist_count = len(info.get('entries', [])) if is_playlist else 0
+            
+            return {
+                'success': True,
+                'title': info.get('title', 'Unknown'),
+                'duration': info.get('duration', 0),
+                'thumbnail': info.get('thumbnail', ''),
+                'chapters': chapters,
+                'has_chapters': len(chapters) > 0,
+                'is_playlist': is_playlist,
+                'playlist_count': playlist_count,
+                'extractor': info.get('extractor', 'youtube')
+            }
     except Exception as e:
-        error_msg = str(e)
-        print(f"❌ Erro ao extrair vídeo: {error_msg}")
-        
-        # Se o erro for sobre player response, tenta com configurações alternativas
-        if "player response" in error_msg.lower() or "extracting" in error_msg.lower():
-            print("🔄 Tentando com múltiplas configurações alternativas...")
-            
-            fallback_configs = [
-                {
-                    'name': 'Android',
-                    'extractor_args': {
-                        'youtube': {
-                            'skip_unavailable_videos': True,
-                            'player_client': ['android'],
-                        }
-                    }
-                },
-                {
-                    'name': 'IOS',
-                    'extractor_args': {
-                        'youtube': {
-                            'skip_unavailable_videos': True,
-                            'player_client': ['ios'],
-                        }
-                    }
-                },
-                {
-                    'name': 'Web Embedded',
-                    'extractor_args': {
-                        'youtube': {
-                            'skip_unavailable_videos': True,
-                            'player_client': ['web_embedded'],
-                        }
-                    }
-                },
-                {
-                    'name': 'Android + IOS',
-                    'extractor_args': {
-                        'youtube': {
-                            'skip_unavailable_videos': True,
-                            'player_client': ['android', 'ios', 'web'],
-                        }
-                    }
-                },
-                {
-                    'name': 'TV Embedded',
-                    'extractor_args': {
-                        'youtube': {
-                            'skip_unavailable_videos': True,
-                            'player_client': ['tv_embedded'],
-                        }
-                    }
-                },
-            ]
-            
-            for config in fallback_configs:
-                try:
-                    print(f"  ↳ Tentando: {config['name']}...")
-                    ydl_opts_alt = {
-                        'quiet': False,
-                        'no_warnings': False,
-                        'extract_flat': False,
-                        'skip_download': True,
-                        'socket_timeout': 60,
-                        'noplaylist': True,
-                        'extractor_args': config['extractor_args'],
-                        'http_headers': get_default_headers(),
-                        'youtube_include_dash_manifest': False,
-                        'retries': 5,
-                    }
-                    
-                    with yt_dlp.YoutubeDL(ydl_opts_alt) as ydl:
-                        apply_rate_limit()
-                        info = extract_with_retry(url, ydl_opts_alt, max_retries=2)
-                        
-                        chapters = []
-                        if info.get('chapters'):
-                            for idx, chapter in enumerate(info['chapters']):
-                                chapters.append({
-                                    'id': idx,
-                                    'title': chapter.get('title', f'Capítulo {idx + 1}'),
-                                    'start_time': chapter.get('start_time', 0),
-                                    'end_time': chapter.get('end_time', info.get('duration', 0))
-                                })
-                        
-                        print(f"  ✅ Sucesso com {config['name']}!")
-                        return {
-                            'success': True,
-                            'title': info.get('title', 'Unknown'),
-                            'duration': info.get('duration', 0),
-                            'thumbnail': info.get('thumbnail', ''),
-                            'chapters': chapters,
-                            'has_chapters': len(chapters) > 0
-                        }
-                except Exception as e2:
-                    print(f"  ✗ Falhou com {config['name']}: {str(e2)[:50]}")
-                    continue
-        
         return {
             'success': False,
             'error': str(e)
@@ -316,7 +197,7 @@ def format_time(seconds):
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
-def download_video(url, video_info, selected_chapters, download_id, output_format='mp4', quality='best', download_type='chapters'):
+def download_video(url, video_info, selected_chapters, download_id, output_format='mp4', quality='best'):
     """Baixa o vídeo completo ou capítulos selecionados"""
     try:
         download_status[download_id]['status'] = 'downloading'
@@ -327,30 +208,35 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
         # Construir string de formato baseado na qualidade e formato
         format_string = build_format_string(output_format, quality)
         
-        # Usar download_type para determinar se faz splitting mesmo com todos os capítulos selecionados
-        should_split = (download_type == 'chapters' and 
-                       selected_chapters and 
-                       len(selected_chapters) > 0 and
-                       video_info.get('has_chapters', False))
-        
-        if not should_split or not selected_chapters or len(selected_chapters) == len(video_info['chapters']):
-            if download_type == 'complete' or not should_split:
-                # Baixar vídeo completo
-                output_path = TEMP_FOLDER / f"{video_title}.{output_format}"
-                
-                ydl_opts = {
-                    'format': format_string,
-                    'outtmpl': str(output_path),
-                    'progress_hooks': [lambda d: update_progress(d, download_id)],
-                    'merge_output_format': output_format if output_format in ['mp4', 'mkv', 'webm'] else 'mp4',
-                    'noplaylist': True,
-                    'http_headers': get_default_headers(),
-                'postprocessors': [] if output_format not in ['mp3', 'm4a', 'wav', 'opus'] else [{
+        if not selected_chapters or len(selected_chapters) == len(video_info['chapters']):
+            # Baixar vídeo completo
+            output_path = DOWNLOAD_FOLDER / f"{video_title}.{output_format}"
+            
+            ydl_opts = {
+                'format': format_string,
+                'outtmpl': str(output_path),
+                'progress_hooks': [lambda d: update_progress(d, download_id)],
+                'merge_output_format': output_format if output_format in ['mp4', 'mkv', 'webm'] else 'mp4',
+                'noplaylist': True,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Sec-Fetch-Mode': 'navigate',
+                },
+            }
+            
+            # Adicionar FFmpeg location se disponível
+            if FFMPEG_LOCATION:
+                ydl_opts['ffmpeg_location'] = FFMPEG_LOCATION
+            
+            # Adicionar postprocessor para áudio
+            if output_format in ['mp3', 'm4a', 'wav', 'opus']:
+                ydl_opts['postprocessors'] = [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': output_format,
                     'preferredquality': '192' if output_format == 'mp3' else '0',
-                }],
-            }
+                }]
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
@@ -360,7 +246,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
             download_status[download_id]['files'] = [str(output_path)]
         else:
             # Baixar vídeo completo primeiro e depois dividir em capítulos
-            temp_video = TEMP_FOLDER / f"temp_{download_id}.mp4"
+            temp_video = DOWNLOAD_FOLDER / f"temp_{download_id}.mp4"
             
             ydl_opts = {
                 'format': format_string,
@@ -368,8 +254,17 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
                 'progress_hooks': [lambda d: update_progress(d, download_id)],
                 'merge_output_format': 'mp4',
                 'noplaylist': True,
-                'http_headers': get_default_headers(),
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-us,en;q=0.5',
+                    'Sec-Fetch-Mode': 'navigate',
+                },
             }
+            
+            # Adicionar FFmpeg location se disponível
+            if FFMPEG_LOCATION:
+                ydl_opts['ffmpeg_location'] = FFMPEG_LOCATION
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
@@ -381,7 +276,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
             for chapter_id in selected_chapters:
                 chapter = video_info['chapters'][chapter_id]
                 chapter_title = sanitize_filename(chapter['title'])
-                output_file = TEMP_FOLDER / f"{video_title} - {chapter_title}.{output_format}"
+                output_file = DOWNLOAD_FOLDER / f"{video_title} - {chapter_title}.{output_format}"
                 
                 start_time = format_time(chapter['start_time'])
                 duration = chapter['end_time'] - chapter['start_time']
@@ -389,10 +284,16 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
                 # Usar FFmpeg para extrair o capítulo
                 import subprocess
                 
+                # Caminho do FFmpeg
+                if FFMPEG_LOCATION:
+                    ffmpeg_cmd = os.path.join(FFMPEG_LOCATION, 'ffmpeg.exe')
+                else:
+                    ffmpeg_cmd = 'ffmpeg'
+                
                 # Se for áudio apenas, extrair áudio
                 if output_format in ['mp3', 'm4a', 'wav', 'opus']:
                     cmd = [
-                        'ffmpeg',
+                        ffmpeg_cmd,
                         '-i', str(temp_video),
                         '-ss', start_time,
                         '-t', str(duration),
@@ -403,7 +304,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
                     ]
                 else:
                     cmd = [
-                        'ffmpeg',
+                        ffmpeg_cmd,
                         '-i', str(temp_video),
                         '-ss', start_time,
                         '-t', str(duration),
@@ -412,7 +313,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
                         str(output_file)
                     ]
                 
-                subprocess.run(cmd, capture_output=True)
+                subprocess.run(cmd, capture_output=True, check=True)
                 output_files.append(str(output_file))
             
             # Remover arquivo temporário
@@ -422,6 +323,18 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
             download_status[download_id]['status'] = 'completed'
             download_status[download_id]['progress'] = 100
             download_status[download_id]['files'] = output_files
+        
+        # Adicionar ao histórico
+        download_history.append({
+            'id': download_id,
+            'title': video_info.get('title', 'Unknown'),
+            'format': output_format,
+            'quality': quality,
+            'files': download_status[download_id]['files'],
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'url': url
+        })
+        save_download_history()
             
     except Exception as e:
         download_status[download_id]['status'] = 'error'
@@ -437,14 +350,6 @@ def update_progress(d, download_id):
             progress = (d.get('downloaded_bytes', 0) / d['total_bytes_estimate']) * 100
             download_status[download_id]['progress'] = int(progress)
 
-@app.route('/favicon.ico')
-def favicon():
-    """Serve favicon"""
-    return send_file(
-        Path(__file__).parent / 'favicon.ico',
-        mimetype='image/vnd.microsoft.icon'
-    )
-
 @app.route('/')
 def index():
     """Página principal"""
@@ -455,12 +360,7 @@ def video_info():
     """Endpoint para obter informações do vídeo"""
     print("📨 Recebendo requisição /api/video-info")
     data = request.json
-    url = data.get('url', '').strip()
-    
-    # Limpar URL - remover parâmetros de playlist
-    if '?list=' in url:
-        url = url.split('?list=')[0]
-        print(f"🔗 URL limpa (removido ?list=): {url}")
+    url = data.get('url')
     
     print(f"🔗 URL recebida: {url}")
     
@@ -480,7 +380,6 @@ def start_download():
     selected_chapters = data.get('selected_chapters', [])
     output_format = data.get('format', 'mp4')
     quality = data.get('quality', 'best')
-    download_type = data.get('download_type', 'chapters')  # 'chapters' ou 'complete'
     
     if not url or not video_info:
         return jsonify({'success': False, 'error': 'Dados incompletos'}), 400
@@ -497,7 +396,7 @@ def start_download():
     # Iniciar download em thread separada
     thread = threading.Thread(
         target=download_video,
-        args=(url, video_info, selected_chapters, download_id, output_format, quality, download_type)
+        args=(url, video_info, selected_chapters, download_id, output_format, quality)
     )
     thread.start()
     
@@ -524,29 +423,18 @@ def get_download_status(download_id):
 
 @app.route('/api/download-file/<path:filename>')
 def download_file(filename):
-    """Baixa um arquivo e deleta após envio"""
-    file_path = TEMP_FOLDER / filename
-    
-    if not file_path.exists():
-        return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
-    
+    """Serve arquivo para download"""
     try:
-        # Enviar arquivo com streaming (sem salvar duplicado)
-        response = send_file(
+        file_path = DOWNLOAD_FOLDER / filename
+        
+        if not file_path.exists():
+            return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
+        
+        return send_file(
             file_path,
             as_attachment=True,
             download_name=filename
         )
-        
-        # Agendar deleção do arquivo após envio (após 2 segundos)
-        def delete_file_delayed():
-            time.sleep(2)
-            try:
-                if file_path.exists():
-                    os.remove(file_path)
-                    print(f"✓ Arquivo temporário deletado: {filename}")
-            except Exception as e:
-                print(f"⚠️ Erro ao deletar arquivo: {e}")
         
         thread = threading.Thread(target=delete_file_delayed, daemon=True)
         thread.start()
@@ -554,6 +442,22 @@ def download_file(filename):
         return response
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/history')
+def get_history():
+    """Retorna histórico de downloads"""
+    return jsonify({
+        'success': True,
+        'history': download_history[-50:]  # Últimos 50
+    })
+
+@app.route('/api/history/clear', methods=['POST'])
+def clear_history():
+    """Limpa histórico de downloads"""
+    global download_history
+    download_history = []
+    save_download_history()
+    return jsonify({'success': True})
 
 if __name__ == '__main__':
     print("🚀 Iniciando YouTube Chapter Downloader...")
