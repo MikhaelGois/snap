@@ -138,8 +138,9 @@ def get_video_info(url):
         'no_warnings': False,
         'extract_flat': False,
         'skip_download': True,
-        'socket_timeout': 30,
+        'socket_timeout': 60,
         'noplaylist': True,
+        'retries': 5,
         'extractor_args': {
             'youtube': {
                 'skip_unavailable_videos': True,
@@ -183,7 +184,7 @@ def get_video_info(url):
             
             fallback_configs = [
                 {
-                    'name': 'Android Client',
+                    'name': 'Android',
                     'extractor_args': {
                         'youtube': {
                             'skip_unavailable_videos': True,
@@ -192,20 +193,38 @@ def get_video_info(url):
                     }
                 },
                 {
-                    'name': 'Web+Android',
+                    'name': 'IOS',
                     'extractor_args': {
                         'youtube': {
                             'skip_unavailable_videos': True,
-                            'player_client': ['web_embedded', 'android'],
+                            'player_client': ['ios'],
                         }
                     }
                 },
                 {
-                    'name': 'IOS Client',
+                    'name': 'Web Embedded',
                     'extractor_args': {
                         'youtube': {
                             'skip_unavailable_videos': True,
-                            'player_client': ['ios', 'web'],
+                            'player_client': ['web_embedded'],
+                        }
+                    }
+                },
+                {
+                    'name': 'Android + IOS',
+                    'extractor_args': {
+                        'youtube': {
+                            'skip_unavailable_videos': True,
+                            'player_client': ['android', 'ios', 'web'],
+                        }
+                    }
+                },
+                {
+                    'name': 'TV Embedded',
+                    'extractor_args': {
+                        'youtube': {
+                            'skip_unavailable_videos': True,
+                            'player_client': ['tv_embedded'],
                         }
                     }
                 },
@@ -219,11 +238,12 @@ def get_video_info(url):
                         'no_warnings': False,
                         'extract_flat': False,
                         'skip_download': True,
-                        'socket_timeout': 30,
+                        'socket_timeout': 60,
                         'noplaylist': True,
                         'extractor_args': config['extractor_args'],
                         'http_headers': get_default_headers(),
                         'youtube_include_dash_manifest': False,
+                        'retries': 5,
                     }
                     
                     with yt_dlp.YoutubeDL(ydl_opts_alt) as ydl:
@@ -403,7 +423,12 @@ def video_info():
     """Endpoint para obter informações do vídeo"""
     print("📨 Recebendo requisição /api/video-info")
     data = request.json
-    url = data.get('url')
+    url = data.get('url', '').strip()
+    
+    # Limpar URL - remover parâmetros de playlist
+    if '?list=' in url:
+        url = url.split('?list=')[0]
+        print(f"🔗 URL limpa (removido ?list=): {url}")
     
     print(f"🔗 URL recebida: {url}")
     
