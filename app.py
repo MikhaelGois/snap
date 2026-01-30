@@ -76,6 +76,23 @@ def cleanup_old_files():
 # Limpar arquivos ao iniciar
 cleanup_old_files()
 
+def get_default_headers():
+    """Retorna headers padrão para requisições"""
+    return {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0',
+    }
+
 def sanitize_filename(filename):
     """Remove caracteres inválidos do nome do arquivo"""
     return re.sub(r'[<>:"/\\|?*]', '', filename)
@@ -118,12 +135,12 @@ def get_video_info(url):
         'skip_download': True,
         'socket_timeout': 30,
         'noplaylist': True,
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Sec-Fetch-Mode': 'navigate',
+        'extractor_args': {
+            'youtube': {
+                'skip_unavailable_videos': True,
+            }
         },
+        'http_headers': get_default_headers(),
     }
     
     try:
@@ -191,12 +208,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
                     'progress_hooks': [lambda d: update_progress(d, download_id)],
                     'merge_output_format': output_format if output_format in ['mp4', 'mkv', 'webm'] else 'mp4',
                     'noplaylist': True,
-                    'http_headers': {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'en-us,en;q=0.5',
-                    'Sec-Fetch-Mode': 'navigate',
-                },
+                    'http_headers': get_default_headers(),
                 'postprocessors': [] if output_format not in ['mp3', 'm4a', 'wav', 'opus'] else [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': output_format,
@@ -220,12 +232,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
                 'progress_hooks': [lambda d: update_progress(d, download_id)],
                 'merge_output_format': 'mp4',
                 'noplaylist': True,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-us,en;q=0.5',
-                    'Sec-Fetch-Mode': 'navigate',
-                },
+                'http_headers': get_default_headers(),
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -293,6 +300,14 @@ def update_progress(d, download_id):
         elif d.get('total_bytes_estimate'):
             progress = (d.get('downloaded_bytes', 0) / d['total_bytes_estimate']) * 100
             download_status[download_id]['progress'] = int(progress)
+
+@app.route('/favicon.ico')
+def favicon():
+    """Serve favicon"""
+    return send_file(
+        Path(__file__).parent / 'favicon.ico',
+        mimetype='image/vnd.microsoft.icon'
+    )
 
 @app.route('/')
 def index():
