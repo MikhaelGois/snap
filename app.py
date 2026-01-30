@@ -91,6 +91,11 @@ def get_default_headers():
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
         'Cache-Control': 'max-age=0',
+        'Referer': 'https://www.youtube.com/',
+        'Origin': 'https://www.youtube.com',
+        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="130", "Google Chrome";v="130"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
     }
 
 def sanitize_filename(filename):
@@ -172,40 +177,80 @@ def get_video_info(url):
         error_msg = str(e)
         print(f"❌ Erro ao extrair vídeo: {error_msg}")
         
-        # Se o erro for sobre player response, tenta com configuração alternativa
-        if "player response" in error_msg.lower():
-            print("🔄 Tentando com configuração alternativa...")
-            try:
-                ydl_opts_alt = ydl_opts.copy()
-                ydl_opts_alt['extractor_args'] = {
-                    'youtube': {
-                        'skip_unavailable_videos': True,
-                        'player_client': ['android', 'web'],
+        # Se o erro for sobre player response, tenta com configurações alternativas
+        if "player response" in error_msg.lower() or "extracting" in error_msg.lower():
+            print("🔄 Tentando com múltiplas configurações alternativas...")
+            
+            fallback_configs = [
+                {
+                    'name': 'Android Client',
+                    'extractor_args': {
+                        'youtube': {
+                            'skip_unavailable_videos': True,
+                            'player_client': ['android'],
+                        }
                     }
-                }
-                with yt_dlp.YoutubeDL(ydl_opts_alt) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                    
-                    chapters = []
-                    if info.get('chapters'):
-                        for idx, chapter in enumerate(info['chapters']):
-                            chapters.append({
-                                'id': idx,
-                                'title': chapter.get('title', f'Capítulo {idx + 1}'),
-                                'start_time': chapter.get('start_time', 0),
-                                'end_time': chapter.get('end_time', info.get('duration', 0))
-                            })
-                    
-                    return {
-                        'success': True,
-                        'title': info.get('title', 'Unknown'),
-                        'duration': info.get('duration', 0),
-                        'thumbnail': info.get('thumbnail', ''),
-                        'chapters': chapters,
-                        'has_chapters': len(chapters) > 0
+                },
+                {
+                    'name': 'Web+Android',
+                    'extractor_args': {
+                        'youtube': {
+                            'skip_unavailable_videos': True,
+                            'player_client': ['web_embedded', 'android'],
+                        }
                     }
-            except Exception as e2:
-                print(f"❌ Também falhou com alternativa: {e2}")
+                },
+                {
+                    'name': 'IOS Client',
+                    'extractor_args': {
+                        'youtube': {
+                            'skip_unavailable_videos': True,
+                            'player_client': ['ios', 'web'],
+                        }
+                    }
+                },
+            ]
+            
+            for config in fallback_configs:
+                try:
+                    print(f"  ↳ Tentando: {config['name']}...")
+                    ydl_opts_alt = {
+                        'quiet': False,
+                        'no_warnings': False,
+                        'extract_flat': False,
+                        'skip_download': True,
+                        'socket_timeout': 30,
+                        'noplaylist': True,
+                        'extractor_args': config['extractor_args'],
+                        'http_headers': get_default_headers(),
+                        'youtube_include_dash_manifest': False,
+                    }
+                    
+                    with yt_dlp.YoutubeDL(ydl_opts_alt) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        
+                        chapters = []
+                        if info.get('chapters'):
+                            for idx, chapter in enumerate(info['chapters']):
+                                chapters.append({
+                                    'id': idx,
+                                    'title': chapter.get('title', f'Capítulo {idx + 1}'),
+                                    'start_time': chapter.get('start_time', 0),
+                                    'end_time': chapter.get('end_time', info.get('duration', 0))
+                                })
+                        
+                        print(f"  ✅ Sucesso com {config['name']}!")
+                        return {
+                            'success': True,
+                            'title': info.get('title', 'Unknown'),
+                            'duration': info.get('duration', 0),
+                            'thumbnail': info.get('thumbnail', ''),
+                            'chapters': chapters,
+                            'has_chapters': len(chapters) > 0
+                        }
+                except Exception as e2:
+                    print(f"  ✗ Falhou com {config['name']}: {str(e2)[:50]}")
+                    continue
         
         return {
             'success': False,
