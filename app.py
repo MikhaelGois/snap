@@ -8,13 +8,19 @@ from pathlib import Path
 import threading
 import time
 import glob
+import tempfile
+import shutil
+from io import BytesIO
 
 app = Flask(__name__)
 CORS(app)
 
 # Configuração de diretórios
-DOWNLOAD_FOLDER = Path('downloads')
-DOWNLOAD_FOLDER.mkdir(exist_ok=True)
+TEMP_FOLDER = Path(tempfile.gettempdir()) / 'youtube_downloader'
+TEMP_FOLDER.mkdir(exist_ok=True)
+
+# Remover DOWNLOAD_FOLDER (agora usando temp)
+download_files = {}
 
 # Tentar encontrar o FFmpeg instalado pelo winget
 def find_ffmpeg():
@@ -48,6 +54,24 @@ else:
 
 # Armazenar status de downloads em memória
 download_status = {}
+
+def cleanup_old_files():
+    """Limpa arquivos temporários antigos (mais de 1 hora)"""
+    try:
+        import datetime
+        now = time.time()
+        for filepath in TEMP_FOLDER.glob('*'):
+            if os.path.isfile(filepath):
+                if now - os.path.getctime(filepath) > 3600:  # 1 hora
+                    try:
+                        os.remove(filepath)
+                    except:
+                        pass
+    except:
+        pass
+
+# Limpar arquivos ao iniciar
+cleanup_old_files()
 
 def sanitize_filename(filename):
     """Remove caracteres inválidos do nome do arquivo"""
@@ -149,7 +173,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
         
         if not selected_chapters or len(selected_chapters) == len(video_info['chapters']):
             # Baixar vídeo completo
-            output_path = DOWNLOAD_FOLDER / f"{video_title}.{output_format}"
+            output_path = TEMP_FOLDER / f"{video_title}.{output_format}"
             
             ydl_opts = {
                 'format': format_string,
@@ -178,7 +202,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
             download_status[download_id]['files'] = [str(output_path)]
         else:
             # Baixar vídeo completo primeiro e depois dividir em capítulos
-            temp_video = DOWNLOAD_FOLDER / f"temp_{download_id}.mp4"
+            temp_video = TEMP_FOLDER / f"temp_{download_id}.mp4"
             
             ydl_opts = {
                 'format': format_string,
@@ -204,7 +228,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
             for chapter_id in selected_chapters:
                 chapter = video_info['chapters'][chapter_id]
                 chapter_title = sanitize_filename(chapter['title'])
-                output_file = DOWNLOAD_FOLDER / f"{video_title} - {chapter_title}.{output_format}"
+                output_file = TEMP_FOLDER / f"{video_title} - {chapter_title}.{output_format}"
                 
                 start_time = format_time(chapter['start_time'])
                 duration = chapter['end_time'] - chapter['start_time']
@@ -333,13 +357,36 @@ def get_download_status(download_id):
 
 @app.route('/api/download-file/<path:filename>')
 def download_file(filename):
-    """Baixa um arquivo"""
-    file_path = DOWNLOAD_FOLDER / filename
+    """Baixa um arquivo e deleta após envio"""
+    file_path = TEMP_FOLDER / filename
     
     if not file_path.exists():
         return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
     
-    return send_file(file_path, as_attachment=True)
+    try:
+        # Enviar arquivo com streaming (sem salvar duplicado)
+        response = send_file(
+            file_path,
+            as_attachment=True,
+            download_name=filename
+        )
+        
+        # Agendar deleção do arquivo após envio (após 2 segundos)
+        def delete_file_delayed():
+            time.sleep(2)
+            try:
+                if file_path.exists():
+                    os.remove(file_path)
+                    print(f"✓ Arquivo temporário deletado: {filename}")
+            except Exception as e:
+                print(f"⚠️ Erro ao deletar arquivo: {e}")
+        
+        thread = threading.Thread(target=delete_file_delayed, daemon=True)
+        thread.start()
+        
+        return response
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("🚀 Iniciando YouTube Chapter Downloader...")
