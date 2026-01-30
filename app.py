@@ -19,6 +19,10 @@ CORS(app)
 TEMP_FOLDER = Path(tempfile.gettempdir()) / 'youtube_downloader'
 TEMP_FOLDER.mkdir(exist_ok=True)
 
+# Rate limiting para YouTube
+last_request_time = 0
+REQUEST_DELAY = 2  # segundos entre requisições
+
 # Remover DOWNLOAD_FOLDER (agora usando temp)
 download_files = {}
 
@@ -75,6 +79,33 @@ def cleanup_old_files():
 
 # Limpar arquivos ao iniciar
 cleanup_old_files()
+
+def apply_rate_limit():
+    """Aplica delay entre requisições para evitar rate limiting"""
+    global last_request_time
+    now = time.time()
+    elapsed = now - last_request_time
+    
+    if elapsed < REQUEST_DELAY:
+        wait_time = REQUEST_DELAY - elapsed
+        print(f"⏸️  Rate limit: aguardando {wait_time:.1f}s...")
+        time.sleep(wait_time)
+    
+    last_request_time = time.time()
+
+def extract_with_retry(url, ydl_opts, max_retries=3):
+    """Tenta extrair vídeo com retry exponencial"""
+    for attempt in range(max_retries):
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(url, download=False)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = 2 ** (attempt + 1)  # 2, 4, 8 segundos
+                print(f"  ⚠️  Tentativa {attempt + 1} falhou. Aguardando {wait_time}s antes da próxima...")
+                time.sleep(wait_time)
+            else:
+                raise e
 
 def get_default_headers():
     """Retorna headers padrão para requisições"""
@@ -151,29 +182,29 @@ def get_video_info(url):
     }
     
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            print("⏳ Extraindo informações do vídeo...")
-            info = ydl.extract_info(url, download=False)
-            print("✅ Informações extraídas com sucesso!")
-            
-            chapters = []
-            if info.get('chapters'):
-                for idx, chapter in enumerate(info['chapters']):
-                    chapters.append({
-                        'id': idx,
-                        'title': chapter.get('title', f'Capítulo {idx + 1}'),
-                        'start_time': chapter.get('start_time', 0),
-                        'end_time': chapter.get('end_time', info.get('duration', 0))
-                    })
-            
-            return {
-                'success': True,
-                'title': info.get('title', 'Unknown'),
-                'duration': info.get('duration', 0),
-                'thumbnail': info.get('thumbnail', ''),
-                'chapters': chapters,
-                'has_chapters': len(chapters) > 0
-            }
+        apply_rate_limit()
+        print("⏳ Extraindo informações do vídeo...")
+        info = extract_with_retry(url, ydl_opts, max_retries=3)
+        print("✅ Informações extraídas com sucesso!")
+        
+        chapters = []
+        if info.get('chapters'):
+            for idx, chapter in enumerate(info['chapters']):
+                chapters.append({
+                    'id': idx,
+                    'title': chapter.get('title', f'Capítulo {idx + 1}'),
+                    'start_time': chapter.get('start_time', 0),
+                    'end_time': chapter.get('end_time', info.get('duration', 0))
+                })
+        
+        return {
+            'success': True,
+            'title': info.get('title', 'Unknown'),
+            'duration': info.get('duration', 0),
+            'thumbnail': info.get('thumbnail', ''),
+            'chapters': chapters,
+            'has_chapters': len(chapters) > 0
+        }
     except Exception as e:
         error_msg = str(e)
         print(f"❌ Erro ao extrair vídeo: {error_msg}")
@@ -247,7 +278,8 @@ def get_video_info(url):
                     }
                     
                     with yt_dlp.YoutubeDL(ydl_opts_alt) as ydl:
-                        info = ydl.extract_info(url, download=False)
+                        apply_rate_limit()
+                        info = extract_with_retry(url, ydl_opts_alt, max_retries=2)
                         
                         chapters = []
                         if info.get('chapters'):
