@@ -2,6 +2,8 @@ package com.snap.data.manager
 
 import android.content.Context
 import com.snap.data.api.SnapApiService
+import com.snap.data.database.dao.DownloadHistoryDao
+import com.snap.data.database.entity.DownloadHistoryEntity
 import com.snap.data.models.DownloadProgress
 import com.snap.util.FileManager
 import com.snap.util.DownloadNotificationManager
@@ -26,12 +28,14 @@ import javax.inject.Singleton
  * - Tratar erros
  * - Cancelar downloads
  * - Mostrar notificações
+ * - Salvar histórico no banco de dados
  */
 @Singleton
 class DownloadManager @Inject constructor(
     private val apiService: SnapApiService,
     private val fileManager: FileManager,
     private val notificationManager: DownloadNotificationManager,
+    private val downloadHistoryDao: DownloadHistoryDao,
     private val context: Context
 ) {
     
@@ -211,6 +215,29 @@ class DownloadManager @Inject constructor(
                     )
                 )
                 
+                // Salva no banco de dados
+                val endTime = System.currentTimeMillis()
+                val duration = endTime - startTime
+                val avgSpeed = if (duration > 0) totalBytes / (duration / 1000) else 0L
+                
+                val downloadHistory = DownloadHistoryEntity(
+                    downloadId = downloadId,
+                    videoTitle = fileName,
+                    videoUrl = "", // Será preenchido pelo downloadVideo
+                    fileName = finalFile.name,
+                    filePath = finalFile.absolutePath,
+                    format = "video",
+                    fileSize = totalBytes,
+                    downloadDuration = duration,
+                    averageSpeed = avgSpeed,
+                    downloadStartTime = startTime,
+                    downloadEndTime = endTime,
+                    status = DownloadHistoryEntity.Status.COMPLETED.name,
+                    fileExists = finalFile.exists()
+                )
+                
+                downloadHistoryDao.insert(downloadHistory)
+                
                 // Mostra notificação de conclusão
                 notificationManager.showCompletionNotification(
                     fileName = fileName,
@@ -229,6 +256,26 @@ class DownloadManager @Inject constructor(
                     )
                 )
                 
+                // Salva erro no banco de dados
+                val downloadHistory = DownloadHistoryEntity(
+                    downloadId = downloadId,
+                    videoTitle = fileName,
+                    videoUrl = "",
+                    fileName = fileName,
+                    filePath = "",
+                    format = "video",
+                    fileSize = 0,
+                    downloadDuration = System.currentTimeMillis() - startTime,
+                    averageSpeed = 0,
+                    downloadStartTime = startTime,
+                    downloadEndTime = System.currentTimeMillis(),
+                    status = DownloadHistoryEntity.Status.FAILED.name,
+                    errorMessage = "Falha ao mover arquivo",
+                    fileExists = false
+                )
+                
+                downloadHistoryDao.insert(downloadHistory)
+                
                 notificationManager.showErrorNotification(
                     fileName = fileName,
                     errorMessage = "Falha ao mover arquivo"
@@ -246,6 +293,26 @@ class DownloadManager @Inject constructor(
                     status = "Erro: ${e.message}"
                 )
             )
+            
+            // Salva erro no banco de dados
+            val downloadHistory = DownloadHistoryEntity(
+                downloadId = downloadId,
+                videoTitle = fileName,
+                videoUrl = "",
+                fileName = fileName,
+                filePath = "",
+                format = "video",
+                fileSize = 0,
+                downloadDuration = System.currentTimeMillis() - startTime,
+                averageSpeed = 0,
+                downloadStartTime = startTime,
+                downloadEndTime = System.currentTimeMillis(),
+                status = DownloadHistoryEntity.Status.FAILED.name,
+                errorMessage = e.message ?: "Erro desconhecido",
+                fileExists = false
+            )
+            
+            downloadHistoryDao.insert(downloadHistory)
             
             notificationManager.showErrorNotification(
                 fileName = fileName,

@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,31 +15,38 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.snap.data.models.DownloadHistory
+import com.snap.data.database.entity.DownloadHistoryEntity
 import com.snap.ui.viewmodel.HistoryViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- * HistoryScreen - Exibe histórico de downloads
+ * HistoryScreen - Exibe histórico de downloads do banco de dados
  * 
  * Features:
  * - Lista de downloads com data/hora
- * - Nome do arquivo e formato
- * - Tamanho do arquivo
- * - Status do download
+ * - Nome do arquivo e tamanho
+ * - Status do download (COMPLETED, FAILED)
+ * - Velocidade média de download
  * - Delete individual
  * - Limpar todos os downloads
- * - Search/filter (futuro)
+ * - Search/filter por título
+ * - Estatísticas gerais
  */
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel,
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val downloads by viewModel.downloads.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val totalSize by viewModel.totalSize.collectAsState()
+    val totalCount by viewModel.totalCount.collectAsState()
     
-    LaunchedEffect(Unit) {
-        viewModel.loadHistory()
-    }
+    var searchQuery by remember { mutableStateOf("") }
+    var showClearDialog by remember { mutableStateOf(false) }
     
     Column(
         modifier = modifier
@@ -53,15 +61,24 @@ fun HistoryScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                "Histórico de Downloads",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Column {
+                Text(
+                    "Histórico de Downloads",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (totalCount > 0) {
+                    Text(
+                        "$totalCount downloads (${viewModel.formatFileSize(totalSize)})",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             
-            if (uiState.history.isNotEmpty()) {
+            if (downloads.isNotEmpty()) {
                 IconButton(
-                    onClick = { viewModel.clearHistory() },
+                    onClick = { showClearDialog = true },
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
@@ -73,18 +90,32 @@ fun HistoryScreen(
             }
         }
         
+        // Search bar
+        if (downloads.isNotEmpty()) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { 
+                    searchQuery = it
+                    viewModel.searchDownloads(it)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                placeholder = { Text("Buscar por título...") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(8.dp)
+            )
+        }
+        
         // Content
         when {
-            uiState.isLoading -> {
-                // Loading state
+            isLoading -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Text(
                             "Carregando histórico...",
@@ -94,11 +125,9 @@ fun HistoryScreen(
                     }
                 }
             }
-            uiState.history.isEmpty() -> {
-                // Empty state
+            downloads.isEmpty() -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -130,70 +159,85 @@ fun HistoryScreen(
                 }
             }
             else -> {
-                // History list
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(
-                        items = uiState.history,
+                        items = downloads,
                         key = { it.id }
                     ) { download ->
                         HistoryDownloadItem(
                             download = download,
-                            onDelete = {
-                                // Delete individual download
-                                // Implementation depends on ViewModel API
-                            }
+                            viewModel = viewModel,
+                            onDelete = { viewModel.deleteDownload(download) }
                         )
                     }
                 }
             }
         }
         
-        // Clear confirmation message
-        if (uiState.showClearMessage) {
+        // Error message
+        if (error != null) {
             Snackbar(
                 modifier = Modifier
                     .align(Alignment.CenterHorizontally)
                     .padding(bottom = 16.dp),
-                containerColor = MaterialTheme.colorScheme.secondary,
-                contentColor = MaterialTheme.colorScheme.onSecondary
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Histórico limpo com sucesso")
-                    
-                    TextButton(
-                        onClick = { viewModel.dismissClearMessage() }
-                    ) {
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                action = {
+                    TextButton(onClick = { viewModel.clearError() }) {
                         Text("OK")
                     }
                 }
+            ) {
+                Text(error!!)
             }
         }
+    }
+    
+    // Clear confirmation dialog
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("Limpar histórico?") },
+            text = { Text("Todos os downloads serão removidos. Esta ação não pode ser desfeita.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteAllDownloads()
+                        showClearDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Limpar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
     }
 }
 
 @Composable
 private fun HistoryDownloadItem(
-    download: DownloadHistory,
-    onDelete: (String) -> Unit,
+    download: DownloadHistoryEntity,
+    viewModel: HistoryViewModel,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(120.dp),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(12.dp)
         ) {
             // Top row: filename and delete button
@@ -205,7 +249,7 @@ private fun HistoryDownloadItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = download.fileName,
+                    text = download.videoTitle,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -213,7 +257,7 @@ private fun HistoryDownloadItem(
                 )
                 
                 IconButton(
-                    onClick = { onDelete(download.id) },
+                    onClick = onDelete,
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
@@ -225,7 +269,7 @@ private fun HistoryDownloadItem(
                 }
             }
             
-            // Info row: Format and Size
+            // File size and format
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -239,35 +283,55 @@ private fun HistoryDownloadItem(
                 )
                 
                 Text(
-                    text = formatFileSize(download.fileSize),
+                    text = viewModel.formatFileSize(download.fileSize),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             
-            // Date and time
-            Text(
-                text = formatDateTime(download.downloadedAt),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.outline
-            )
-            
-            // Status badge
+            // Download speed and duration
             Row(
                 modifier = Modifier
-                    .padding(top = 8.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                StatusBadge(status = download.status)
-                
-                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = "Velocidade: ${viewModel.formatSpeed(download.averageSpeed)}",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 
                 Text(
-                    text = download.url.take(30) + if (download.url.length > 30) "..." else "",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.outline,
-                    maxLines = 1
+                    text = "Tempo: ${viewModel.formatDuration(download.downloadDuration / 1000)}",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            // Date and status
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = formatDownloadDate(download.downloadEndTime),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                
+                StatusBadge(status = download.status)
+            }
+            
+            // Error message if failed
+            if (download.status == "FAILED" && download.errorMessage != null) {
+                Text(
+                    text = "Erro: ${download.errorMessage}",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
         }
@@ -279,16 +343,22 @@ private fun StatusBadge(
     status: String,
     modifier: Modifier = Modifier
 ) {
-    val (containerColor, labelColor) = when (status.lowercase()) {
-        "completed", "concluído" -> {
-            MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-        }
-        "failed", "falhou" -> {
-            MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
-        }
-        else -> {
-            MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-        }
+    val (containerColor, labelColor, label) = when (status) {
+        "COMPLETED" -> Triple(
+            MaterialTheme.colorScheme.primaryContainer,
+            MaterialTheme.colorScheme.onPrimaryContainer,
+            "Concluído"
+        )
+        "FAILED" -> Triple(
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
+            "Falhou"
+        )
+        else -> Triple(
+            MaterialTheme.colorScheme.secondaryContainer,
+            MaterialTheme.colorScheme.onSecondaryContainer,
+            status
+        )
     }
     
     Surface(
@@ -298,7 +368,7 @@ private fun StatusBadge(
         color = containerColor
     ) {
         Text(
-            text = status,
+            text = label,
             fontSize = 10.sp,
             color = labelColor,
             fontWeight = FontWeight.Medium
@@ -306,17 +376,8 @@ private fun StatusBadge(
     }
 }
 
-private fun formatDateTime(timestamp: Long): String {
-    val date = java.util.Date(timestamp)
-    val format = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+private fun formatDownloadDate(timestamp: Long): String {
+    val date = Date(timestamp)
+    val format = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
     return format.format(date)
-}
-
-private fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "$bytes B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
-        else -> "${bytes / (1024 * 1024 * 1024)} GB"
-    }
 }

@@ -3,6 +3,8 @@ package com.snap.di
 import android.content.Context
 import com.snap.data.api.ApiServiceFactory
 import com.snap.data.api.SnapApiService
+import com.snap.data.database.AppDatabase
+import com.snap.data.database.dao.DownloadHistoryDao
 import com.snap.data.manager.DownloadManager
 import com.snap.data.repository.VideoRepository
 import com.snap.util.FileManager
@@ -23,6 +25,8 @@ import javax.inject.Singleton
  * - DownloadManager
  * - FileManager
  * - DownloadNotificationManager
+ * - AppDatabase
+ * - DownloadHistoryDao
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -60,6 +64,28 @@ object AppModule {
     }
 
     /**
+     * Fornece a instância do banco de dados
+     */
+    @Singleton
+    @Provides
+    fun provideAppDatabase(
+        @ApplicationContext context: Context
+    ): AppDatabase {
+        return AppDatabase.getInstance(context)
+    }
+
+    /**
+     * Fornece o DAO de histórico de downloads
+     */
+    @Singleton
+    @Provides
+    fun provideDownloadHistoryDao(
+        appDatabase: AppDatabase
+    ): DownloadHistoryDao {
+        return appDatabase.downloadHistoryDao()
+    }
+
+    /**
      * Fornece a instância de DownloadManager
      */
     @Singleton
@@ -68,12 +94,14 @@ object AppModule {
         apiService: SnapApiService,
         fileManager: FileManager,
         notificationManager: DownloadNotificationManager,
+        downloadHistoryDao: DownloadHistoryDao,
         @ApplicationContext context: Context
     ): DownloadManager {
         return DownloadManager(
             apiService = apiService,
             fileManager = fileManager,
             notificationManager = notificationManager,
+            downloadHistoryDao = downloadHistoryDao,
             context = context
         )
     }
