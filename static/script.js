@@ -65,47 +65,61 @@ const siteBadgeColors = {
     'tiktok': '#000000'
 };
 
-// Event Listeners
-fetchBtn.addEventListener('click', fetchVideoInfo);
-urlInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') fetchVideoInfo();
-});
-selectAllBtn.addEventListener('click', () => toggleAllChapters(true));
-deselectAllBtn.addEventListener('click', () => toggleAllChapters(false));
-downloadBtn.addEventListener('click', startDownload);
-newDownloadBtn.addEventListener('click', resetApp);
-formatSelect.addEventListener('change', updateQualityOptions);
-if (historyBtn) historyBtn.addEventListener('click', toggleHistory);
-
-// Event listeners para modo single/multi
-if (singleModeBtn && multiModeBtn) {
-    singleModeBtn.addEventListener('click', () => {
-        console.log('Clicou em Single Mode');
-        switchMode('single');
+// ==================== INICIALIZAÇÃO ====================
+function initializeEventListeners() {
+    // Event Listeners
+    if (fetchBtn) fetchBtn.addEventListener('click', fetchVideoInfo);
+    if (urlInput) urlInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') fetchVideoInfo();
     });
-    multiModeBtn.addEventListener('click', () => {
-        console.log('Clicou em Multi Mode');
-        switchMode('multi');
-    });
-} else {
-    console.error('❌ Botões de modo não encontrados:', { singleModeBtn, multiModeBtn });
-}
+    if (selectAllBtn) selectAllBtn.addEventListener('click', () => toggleAllChapters(true));
+    if (deselectAllBtn) deselectAllBtn.addEventListener('click', () => toggleAllChapters(false));
+    if (downloadBtn) downloadBtn.addEventListener('click', startDownload);
+    if (newDownloadBtn) newDownloadBtn.addEventListener('click', resetApp);
+    if (formatSelect) formatSelect.addEventListener('change', updateQualityOptions);
+    if (historyBtn) historyBtn.addEventListener('click', toggleHistory);
 
-if (fetchMultiBtn) {
-    fetchMultiBtn.addEventListener('click', fetchMultipleUrls);
-} else {
-    console.error('❌ Botão Fetch Multi não encontrado');
-}
-
-// Event listener para mudar tipo de download
-document.addEventListener('change', (e) => {
-    if (e.target.name === 'download-type') {
-        updateDownloadInfo();
+    // Event listeners para modo single/multi
+    if (singleModeBtn && multiModeBtn) {
+        singleModeBtn.addEventListener('click', () => {
+            console.log('Clicou em Single Mode');
+            switchMode('single');
+        });
+        multiModeBtn.addEventListener('click', () => {
+            console.log('Clicou em Multi Mode');
+            switchMode('multi');
+        });
+        console.log('✅ Event listeners de modo configurados');
+    } else {
+        console.error('❌ Botões de modo não encontrados:', { singleModeBtn, multiModeBtn });
     }
-});
 
-// Carregar histórico ao iniciar
-loadHistoryCount();
+    if (fetchMultiBtn) {
+        fetchMultiBtn.addEventListener('click', fetchMultipleUrls);
+        console.log('✅ Event listener fetch-multi configurado');
+    } else {
+        console.error('❌ Botão Fetch Multi não encontrado');
+    }
+
+    // Event listener para mudar tipo de download
+    document.addEventListener('change', (e) => {
+        if (e.target.name === 'download-type') {
+            updateDownloadInfo();
+        }
+    });
+
+    console.log('📹 Video Splitter Downloader carregado!');
+    console.log('🌍 Suporta YouTube, Vimeo, Dailymotion e mais de 1000 sites!');
+    loadHistoryCount();
+}
+
+// Inicializar quando o DOM estiver pronto
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeEventListeners);
+} else {
+    // DOM já está pronto
+    initializeEventListeners();
+}
 
 // Funções
 function updateQualityOptions() {
@@ -776,13 +790,6 @@ async function clearHistory() {
         showError('❌ Erro ao limpar histórico: ' + error.message);
     }
 }
-
-// Inicialização
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('📹 Video Splitter Downloader carregado!');
-    console.log('🌍 Suporta YouTube, Vimeo, Dailymotion e mais de 1000 sites!');
-    loadHistoryCount();
-});
 
 // Funções de Player
 function playDownload(filePath) {
