@@ -5,18 +5,28 @@ import com.snap.data.models.DownloadStatusResponse
 import com.snap.data.models.HistoryResponse
 import com.snap.data.models.VideoInfoResponse
 import kotlinx.serialization.SerialName
+import okhttp3.ResponseBody
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
- * API service interface for Snap backend communication
+ * SnapApiService - Interface para comunicação com o backend Snap
+ * 
+ * Define todos os endpoints disponíveis:
+ * - Informações de vídeo
+ * - Iniciar downloads
+ * - Status de download
+ * - Histórico
+ * - Health check
  */
 interface SnapApiService {
 
     /**
-     * Fetch video information from a URL
+     * Buscar informações do vídeo a partir de uma URL
      */
     @POST("/api/video-info")
     suspend fun getVideoInfo(
@@ -24,7 +34,7 @@ interface SnapApiService {
     ): VideoInfoResponse
 
     /**
-     * Initiate a video download
+     * Iniciar um download de vídeo
      */
     @POST("/api/download")
     suspend fun startDownload(
@@ -32,7 +42,17 @@ interface SnapApiService {
     ): DownloadInitResponse
 
     /**
-     * Get the current status of a download
+     * Baixar o arquivo de vídeo
+     * 
+     * Retorna ResponseBody para streaming do arquivo
+     */
+    @GET("/api/download/file")
+    suspend fun downloadVideo(
+        @Query("url") videoUrl: String
+    ): Response<ResponseBody>
+
+    /**
+     * Obter status de um download
      */
     @GET("/api/download-status/{id}")
     suspend fun getDownloadStatus(
@@ -40,26 +60,26 @@ interface SnapApiService {
     ): DownloadStatusResponse
 
     /**
-     * Get download history
+     * Obter histórico de downloads
      */
     @GET("/api/history")
     suspend fun getHistory(): HistoryResponse
 
     /**
-     * Clear download history
+     * Limpar histórico de downloads
      */
     @POST("/api/history/clear")
     suspend fun clearHistory(): HistoryResponse
 
     /**
-     * Check if server is available
+     * Verificar disponibilidade do servidor
      */
     @GET("/")
     suspend fun healthCheck(): String
 }
 
 /**
- * Request model for video info endpoint
+ * VideoInfoRequest - Modelo para requisição de informações
  */
 @kotlinx.serialization.Serializable
 data class VideoInfoRequest(
@@ -68,14 +88,14 @@ data class VideoInfoRequest(
 )
 
 /**
- * Request model for download endpoint
+ * DownloadRequest - Modelo para requisição de download
  */
 @kotlinx.serialization.Serializable
 data class DownloadRequest(
     @SerialName("url")
     val url: String,
     @SerialName("format")
-    val format: String, // "best_video", "best_audio", etc.
+    val format: String,
     @SerialName("quality")
     val quality: String = "best",
     @SerialName("mode")

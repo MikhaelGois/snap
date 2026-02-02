@@ -2,108 +2,147 @@ package com.snap.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.snap.data.manager.DownloadManager
 import com.snap.data.models.DownloadProgress
-import com.snap.data.repository.Result
-import com.snap.data.repository.VideoRepository
+import com.snap.data.models.DownloadMode
+import com.snap.data.models.DownloadFormat
+import com.snap.data.models.DownloadQuality
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
+import javax.inject.Inject
 
 data class DownloadUiState(
+    val downloadProgress: DownloadProgress = DownloadProgress(
+        downloadId = "",
+        percentage = 0,
+        downloadedBytes = 0,
+        totalBytes = 0,
+        speed = 0,
+        timeRemaining = 0,
+        status = "Pronto"
+    ),
+    val downloadStatus: String = "",
     val isDownloading: Boolean = false,
     val downloadId: String? = null,
-    val progress: DownloadProgress? = null,
     val error: String? = null,
     val isCompleted: Boolean = false
 )
 
 /**
- * ViewModel for managing download progress
+ * DownloadViewModel - Gerencia o estado de download na UI
+ * 
+ * Responsabilidades:
+ * - Iniciar downloads via DownloadManager
+ * - Monitorar progresso em tempo real
+ * - Gerenciar estado na UI
+ * - Tratar erros
  */
-class DownloadViewModel(
-    private val repository: VideoRepository
+@HiltViewModel
+class DownloadViewModel @Inject constructor(
+    private val downloadManager: DownloadManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DownloadUiState())
     val uiState: StateFlow<DownloadUiState> = _uiState.asStateFlow()
 
+    /**
+     * Inicia um novo download
+     */
     fun startDownload(
-        url: String,
-        format: String,
-        quality: String = "best",
-        mode: String = "single",
-        selectedChapters: List<Int> = emptyList()
+        videoUrl: String,
+        fileName: String,
+        format: DownloadFormat = DownloadFormat.MP4,
+        quality: DownloadQuality = DownloadQuality.BEST,
+        mode: DownloadMode = DownloadMode.SINGLE,
+        selectedChapters: List<String> = emptyList()
     ) {
         viewModelScope.launch {
+            val downloadId = UUID.randomUUID().toString()
+            
             _uiState.value = _uiState.value.copy(
                 isDownloading = true,
+                downloadId = downloadId,
                 error = null,
                 isCompleted = false,
-                progress = null
+                downloadStatus = "Iniciando download..."
             )
 
-            val result = repository.startDownload(
-                url = url,
-                format = format,
-                quality = quality,
-                mode = mode,
-                selectedChapters = selectedChapters
-            )
-
-            when (result) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(downloadId = result.data)
-                    monitorProgress(result.data)
-                }
-                is Result.Error -> {
+            try {
+                downloadManager.downloadVideo(
+                    downloadId = downloadId,
+                    videoUrl = videoUrl,
+                    fileName = fileName,
+                    format = format.name
+                ).collect { progress ->
                     _uiState.value = _uiState.value.copy(
-                        isDownloading = false,
-                        error = result.exception.message ?: "Unknown error",
-                        isCompleted = false
+                        downloadProgress = progress,
+                        downloadStatus = progress.status,
+                        isDownloading = progress.percentage < 100
                     )
+
+                    if (progress.percentage >= 100) {
+                        _uiState.value = _uiState.value.copy(
+                            isCompleted = true,
+                            isDownloading = false
+                        )
+                    }
                 }
-                is Result.Loading -> {
-                    // Already set above
-                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isDownloading = false,
+                    error = e.message ?: "Erro desconhecido",
+                    isCompleted = false
+                )
             }
         }
     }
 
-    private fun monitorProgress(downloadId: String) {
+    /**
+     * Monitora progresso de um download existente
+     */
+    fun monitorProgress() {
+        val downloadId = _uiState.value.downloadId ?: return
+
         viewModelScope.launch {
-            repository.monitorDownloadProgress(downloadId).collect { result ->
-                when (result) {
-                    is Result.Success -> {
-                        _uiState.value = _uiState.value.copy(
-                            progress = result.data,
-                            isDownloading = result.data.status != "completed"
-                        )
-
-                        if (result.data.status == "completed") {
-                            _uiState.value = _uiState.value.copy(isCompleted = true)
-                        }
-                    }
-                    is Result.Error -> {
-                        _uiState.value = _uiState.value.copy(
-                            isDownloading = false,
-                            error = result.exception.message ?: "Unknown error",
-                            isCompleted = false
-                        )
-                    }
-                    is Result.Loading -> {
-                        // Progress update pending
-                    }
-                }
+            try {
+                // Monitora progresso
+                _uiState.value = _uiState.value.copy(
+                    downloadStatus = "Monitorando progresso..."
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = e.message ?: "Erro ao monitorar progresso"
+                )
             }
         }
-    }
 
+    /**
+     * Reseta o estado de download
+     */
     fun resetDownload() {
         _uiState.value = DownloadUiState()
     }
 
+    /**
+     * Limpa mensagem de erro
+     */
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    /**
+     * Cancela o download atual
+     */
+    fun cancelDownload() {
+        val downloadId = _uiState.value.downloadId ?: return
+        downloadManager.cancelDownload(downloadId)
+        _uiState.value = _uiState.value.copy(
+            isDownloading = false,
+            downloadStatus = "Download cancelado"
+        )
     }
 }
