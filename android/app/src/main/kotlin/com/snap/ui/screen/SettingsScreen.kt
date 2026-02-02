@@ -14,7 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import com.snap.ui.theme.ThemeManager
+import com.snap.util.NotificationPreferencesManager
 import kotlinx.coroutines.launch
 
 /**
@@ -34,9 +36,20 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val notificationManager = remember { NotificationPreferencesManager(context) }
+    
     val themeMode by themeManager.themeMode.collectAsState(initial = ThemeManager.THEME_MODE_AUTO)
     val useDynamicColor by themeManager.useDynamicColor.collectAsState(initial = true)
     val contrastLevel by themeManager.contrastLevel.collectAsState(initial = ThemeManager.CONTRAST_NORMAL)
+    
+    // Notification preferences
+    val downloadProgressEnabled by notificationManager.downloadProgressEnabled.collectAsState(initial = true)
+    val downloadSuccessEnabled by notificationManager.downloadSuccessEnabled.collectAsState(initial = true)
+    val downloadErrorEnabled by notificationManager.downloadErrorEnabled.collectAsState(initial = true)
+    val soundEnabled by notificationManager.soundEnabled.collectAsState(initial = true)
+    val vibrationEnabled by notificationManager.vibrationEnabled.collectAsState(initial = true)
+    val lightEnabled by notificationManager.lightEnabled.collectAsState(initial = true)
     
     Column(
         modifier = modifier
@@ -187,6 +200,117 @@ fun SettingsScreen(
                     }
                 }
             }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // Notification Settings
+            SettingsSectionHeader("Notificações")
+            
+            // Download Progress
+            SettingItem(
+                title = "Progresso de Download",
+                description = if (downloadProgressEnabled) "Ativado" else "Desativado",
+                trailing = {
+                    Switch(
+                        checked = downloadProgressEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                notificationManager.setDownloadProgressEnabled(enabled)
+                            }
+                        }
+                    )
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Download Success
+            SettingItem(
+                title = "Download Concluído",
+                description = if (downloadSuccessEnabled) "Ativado" else "Desativado",
+                trailing = {
+                    Switch(
+                        checked = downloadSuccessEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                notificationManager.setDownloadSuccessEnabled(enabled)
+                            }
+                        }
+                    )
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Download Error
+            SettingItem(
+                title = "Erros de Download",
+                description = if (downloadErrorEnabled) "Ativado" else "Desativado",
+                trailing = {
+                    Switch(
+                        checked = downloadErrorEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                notificationManager.setDownloadErrorEnabled(enabled)
+                            }
+                        }
+                    )
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Sound Notification
+            SettingItem(
+                title = "Som",
+                description = if (soundEnabled) "Ligado" else "Desligado",
+                trailing = {
+                    Switch(
+                        checked = soundEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                notificationManager.setSoundEnabled(enabled)
+                            }
+                        }
+                    )
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Vibration
+            SettingItem(
+                title = "Vibração",
+                description = if (vibrationEnabled) "Ligado" else "Desligado",
+                trailing = {
+                    Switch(
+                        checked = vibrationEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                notificationManager.setVibrationEnabled(enabled)
+                            }
+                        }
+                    )
+                }
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Light
+            SettingItem(
+                title = "Luz",
+                description = if (lightEnabled) "Ligado" else "Desligado",
+                trailing = {
+                    Switch(
+                        checked = lightEnabled,
+                        onCheckedChange = { enabled ->
+                            scope.launch {
+                                notificationManager.setLightEnabled(enabled)
+                            }
+                        }
+                    )
+                }
+            )
             
             Spacer(modifier = Modifier.height(24.dp))
             

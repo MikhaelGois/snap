@@ -25,7 +25,7 @@ import javax.inject.Singleton
  * - Mostrar notificações de conclusão
  * - Mostrar notificações de erro
  * - Gerenciar sons e vibração
- * - Gerenciar ações de notificação
+ * - Integrar com NotificationChannelManager e AdvancedNotificationBuilder
  */
 @Singleton
 class DownloadNotificationManager @Inject constructor(
@@ -43,11 +43,14 @@ class DownloadNotificationManager @Inject constructor(
     
     private val notificationManager = NotificationManagerCompat.from(context)
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+    private val channelManager = NotificationChannelManager(context)
+    private val notificationBuilder = AdvancedNotificationBuilder(context)
+    private val preferencesManager = NotificationPreferencesManager(context)
     
     init {
         createNotificationChannel()
+        channelManager.createNotificationChannels()
     }
-    
     /**
      * Cria o canal de notificação para Android 8.0+
      */
