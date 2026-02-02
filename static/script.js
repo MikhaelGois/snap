@@ -78,9 +78,24 @@ formatSelect.addEventListener('change', updateQualityOptions);
 if (historyBtn) historyBtn.addEventListener('click', toggleHistory);
 
 // Event listeners para modo single/multi
-singleModeBtn.addEventListener('click', () => switchMode('single'));
-multiModeBtn.addEventListener('click', () => switchMode('multi'));
-fetchMultiBtn.addEventListener('click', fetchMultipleUrls);
+if (singleModeBtn && multiModeBtn) {
+    singleModeBtn.addEventListener('click', () => {
+        console.log('Clicou em Single Mode');
+        switchMode('single');
+    });
+    multiModeBtn.addEventListener('click', () => {
+        console.log('Clicou em Multi Mode');
+        switchMode('multi');
+    });
+} else {
+    console.error('❌ Botões de modo não encontrados:', { singleModeBtn, multiModeBtn });
+}
+
+if (fetchMultiBtn) {
+    fetchMultiBtn.addEventListener('click', fetchMultipleUrls);
+} else {
+    console.error('❌ Botão Fetch Multi não encontrado');
+}
 
 // Event listener para mudar tipo de download
 document.addEventListener('change', (e) => {
@@ -499,16 +514,21 @@ function resetApp() {
 
 // Funções de modo Single/Multi
 function switchMode(mode) {
+    console.log(`🔄 Mudando para modo: ${mode}`);
+    console.log('Elementos:', { singleInputMode, multiInputMode });
+    
     if (mode === 'single') {
-        singleInputMode.classList.remove('hidden');
-        multiInputMode.classList.add('hidden');
-        singleModeBtn.classList.add('active');
-        multiModeBtn.classList.remove('active');
+        if (singleInputMode) singleInputMode.classList.remove('hidden');
+        if (multiInputMode) multiInputMode.classList.add('hidden');
+        if (singleModeBtn) singleModeBtn.classList.add('active');
+        if (multiModeBtn) multiModeBtn.classList.remove('active');
+        console.log('✅ Modo Single ativado');
     } else {
-        singleInputMode.classList.add('hidden');
-        multiInputMode.classList.remove('hidden');
-        singleModeBtn.classList.remove('active');
-        multiModeBtn.classList.add('active');
+        if (singleInputMode) singleInputMode.classList.add('hidden');
+        if (multiInputMode) multiInputMode.classList.remove('hidden');
+        if (singleModeBtn) singleModeBtn.classList.remove('active');
+        if (multiModeBtn) multiModeBtn.classList.add('active');
+        console.log('✅ Modo Multi ativado');
     }
 }
 
