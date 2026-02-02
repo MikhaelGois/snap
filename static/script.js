@@ -7,6 +7,12 @@ let progressInterval = null;
 // Elementos DOM
 const urlInput = document.getElementById('youtube-url');
 const fetchBtn = document.getElementById('fetch-btn');
+const multiUrlsInput = document.getElementById('multi-urls');
+const fetchMultiBtn = document.getElementById('fetch-multi-btn');
+const singleInputMode = document.getElementById('single-input-mode');
+const multiInputMode = document.getElementById('multi-input-mode');
+const singleModeBtn = document.getElementById('single-mode-btn');
+const multiModeBtn = document.getElementById('multi-mode-btn');
 const videoSection = document.getElementById('video-section');
 const videoThumbnail = document.getElementById('video-thumbnail');
 const videoTitle = document.getElementById('video-title');
@@ -33,6 +39,7 @@ const historyList = document.getElementById('history-list');
 const videoQualityGroup = document.getElementById('video-quality-group');
 const audioQualityGroup = document.getElementById('audio-quality-group');
 const playerSection = document.getElementById('player-section');
+const playerPlaceholder = document.getElementById('player-placeholder');
 const videoPlayer = document.getElementById('video-player');
 const audioPlayer = document.getElementById('audio-player');
 const playlistBadge = document.getElementById('playlist-badge');
@@ -69,6 +76,11 @@ downloadBtn.addEventListener('click', startDownload);
 newDownloadBtn.addEventListener('click', resetApp);
 formatSelect.addEventListener('change', updateQualityOptions);
 if (historyBtn) historyBtn.addEventListener('click', toggleHistory);
+
+// Event listeners para modo single/multi
+singleModeBtn.addEventListener('click', () => switchMode('single'));
+multiModeBtn.addEventListener('click', () => switchMode('multi'));
+fetchMultiBtn.addEventListener('click', fetchMultipleUrls);
 
 // Event listener para mudar tipo de download
 document.addEventListener('change', (e) => {
@@ -457,10 +469,7 @@ function showDownloadComplete(files) {
         downloadLinks.appendChild(wrapper);
     });
     
-    // Reproduzir o primeiro arquivo automaticamente
-    if (files.length > 0) {
-        playDownload(files[0]);
-    }
+    // Não reproduzir automaticamente - usuário clica em "Reproduzir" se quiser
     
     // Recarregar contagem do histórico
     loadHistoryCount();
@@ -468,6 +477,7 @@ function showDownloadComplete(files) {
 
 function resetApp() {
     urlInput.value = '';
+    multiUrlsInput.value = '';
     currentVideoInfo = null;
     currentUrl = null;
     downloadId = null;
@@ -475,14 +485,186 @@ function resetApp() {
     videoSection.classList.add('hidden');
     progressSection.classList.add('hidden');
     completeSection.classList.add('hidden');
+    playerSection.classList.add('hidden');
     videoSection.style.display = 'none';
     progressSection.style.display = 'none';
     completeSection.style.display = 'none';
+    playerSection.style.display = 'none';
     errorMessage.style.display = 'none';
     errorMessage.classList.add('hidden');
     
     progressBar.style.width = '0%';
     progressText.textContent = '0%';
+}
+
+// Funções de modo Single/Multi
+function switchMode(mode) {
+    if (mode === 'single') {
+        singleInputMode.classList.remove('hidden');
+        multiInputMode.classList.add('hidden');
+        singleModeBtn.classList.add('active');
+        multiModeBtn.classList.remove('active');
+    } else {
+        singleInputMode.classList.add('hidden');
+        multiInputMode.classList.remove('hidden');
+        singleModeBtn.classList.remove('active');
+        multiModeBtn.classList.add('active');
+    }
+}
+
+async function fetchMultipleUrls() {
+    const urls = multiUrlsInput.value
+        .split('\n')
+        .map(url => url.trim())
+        .filter(url => url.length > 0);
+    
+    if (urls.length === 0) {
+        showError('Cole pelo menos uma URL');
+        return;
+    }
+    
+    showLoader(fetchMultiBtn);
+    
+    // Esconder seções anteriores
+    videoSection.classList.add('hidden');
+    videoSection.style.display = 'none';
+    
+    // Mostrar progresso
+    progressSection.classList.remove('hidden');
+    progressSection.style.display = 'block';
+    progressStatus.textContent = `Baixando ${urls.length} vídeos...`;
+    
+    let completed = 0;
+    const totalUrls = urls.length;
+    
+    for (const url of urls) {
+        try {
+            // Buscar info do vídeo
+            const infoResponse = await fetch('/api/video-info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+            
+            const info = await infoResponse.json();
+            
+            if (!info.success) {
+                console.error(`Erro ao buscar ${url}:`, info.error);
+                completed++;
+                continue;
+            }
+            
+            // Iniciar download (vídeo completo, melhor qualidade, MP4)
+            const downloadResponse = await fetch('/api/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: url,
+                    video_info: info,
+                    selected_chapters: [],
+                    format: 'mp4',
+                    quality: 'best',
+                    download_type: 'single'
+                })
+            });
+            
+            const downloadData = await downloadResponse.json();
+            
+            if (downloadData.success) {
+                // Monitorar progresso
+                await monitorDownload(downloadData.download_id);
+            }
+            
+            completed++;
+            const progress = Math.round((completed / totalUrls) * 100);
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `${progress}%`;
+            progressStatus.textContent = `${completed}/${totalUrls} vídeos baixados`;
+            
+        } catch (error) {
+            console.error(`Erro ao processar ${url}:`, error);
+            completed++;
+        }
+    }
+    
+    hideLoader(fetchMultiBtn);
+    
+    // Mostrar seção de completo
+    progressSection.classList.add('hidden');
+    progressSection.style.display = 'none';
+    completeSection.classList.remove('hidden');
+    completeSection.style.display = 'block';
+    
+    // Carregar todos os arquivos baixados
+    await loadAllDownloadedFiles();
+}
+
+async function monitorDownload(downloadId) {
+    return new Promise((resolve) => {
+        const interval = setInterval(async () => {
+            try {
+                const response = await fetch(`/api/download-status/${downloadId}`);
+                const data = await response.json();
+                
+                if (data.status === 'completed' || data.status === 'error') {
+                    clearInterval(interval);
+                    resolve();
+                }
+            } catch (error) {
+                clearInterval(interval);
+                resolve();
+            }
+        }, 1000);
+    });
+}
+
+async function loadAllDownloadedFiles() {
+    try {
+        const response = await fetch('/api/history');
+        const data = await response.json();
+        
+        if (data.success && data.history.length > 0) {
+            downloadLinks.innerHTML = '';
+            
+            // Pegar os últimos 10 downloads
+            const recentDownloads = data.history.slice(-10).reverse();
+            
+            recentDownloads.forEach(item => {
+                if (item.files && item.files.length > 0) {
+                    item.files.forEach(filePath => {
+                        const fileName = filePath.split('\\\\').pop().split('/').pop();
+                        
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'download-link-wrapper';
+                        
+                        const link = document.createElement('a');
+                        link.href = `/api/download-file/${encodeURIComponent(fileName)}`;
+                        link.className = 'download-link';
+                        link.innerHTML = `
+                            <span class="download-link-name">📥 ${fileName}</span>
+                            <span class="download-link-icon">⬇️</span>
+                        `;
+                        link.download = fileName;
+                        link.target = '_blank';
+                        
+                        const playBtn = document.createElement('button');
+                        playBtn.className = 'btn btn-secondary btn-sm';
+                        playBtn.innerHTML = '▶️ Reproduzir';
+                        playBtn.onclick = (e) => {
+                            e.preventDefault();
+                            playDownload(filePath);
+                        };
+                        
+                        wrapper.appendChild(link);
+                        wrapper.appendChild(playBtn);
+                        downloadLinks.appendChild(wrapper);
+                    });
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao carregar arquivos:', error);
+    }
 }
 
 // Funções do Histórico
@@ -598,18 +780,22 @@ function playDownload(filePath) {
         audioPlayer.src = `/api/download-file/${encodeURIComponent(filename)}`;
         audioPlayer.style.display = 'block';
         videoPlayer.style.display = 'none';
+        playerPlaceholder.style.display = 'none';
         playerSection.classList.remove('hidden');
-        audioPlayer.play().catch(e => console.error('Erro ao reproduzir áudio:', e));
+        playerSection.style.display = 'block';
+        // Não fazer auto-play - deixar usuário controlar
     } else if (isVideo) {
         videoPlayer.src = `/api/download-file/${encodeURIComponent(filename)}`;
         videoPlayer.style.display = 'block';
         audioPlayer.style.display = 'none';
+        playerPlaceholder.style.display = 'none';
         playerSection.classList.remove('hidden');
-        videoPlayer.play().catch(e => console.error('Erro ao reproduzir vídeo:', e));
+        playerSection.style.display = 'block';
+        // Não fazer auto-play - deixar usuário controlar
     }
     
     // Scroll suave até o player
-    playerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    playerSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // Carregar contagem de histórico

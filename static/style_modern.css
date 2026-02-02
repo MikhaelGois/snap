@@ -190,6 +190,39 @@ body {
     font-weight: 700;
 }
 
+/* Mode Toggle Buttons */
+.mode-toggle {
+    display: flex;
+    gap: 0.5rem;
+    background: var(--bg-primary);
+    padding: 4px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.mode-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.mode-btn:hover {
+    background: rgba(255, 107, 53, 0.1);
+    color: #FF6B35;
+}
+
+.mode-btn.active {
+    background: linear-gradient(135deg, #FF6B35, #F7931E);
+    color: white;
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+}
+
 /* ==================== INPUT SECTION ==================== */
 .input-section {
     background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
@@ -231,6 +264,35 @@ body {
 
 #youtube-url::placeholder {
     color: var(--text-tertiary);
+}
+
+/* Multi URLs Textarea */
+#multi-urls {
+    flex: 1;
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-family: 'Inter', monospace;
+    line-height: 1.6;
+    resize: vertical;
+    transition: all 0.3s ease;
+    min-height: 150px;
+}
+
+#multi-urls:focus {
+    outline: none;
+    border-color: #FF6B35;
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    background: rgba(15, 20, 25, 0.9);
+}
+
+#multi-urls::placeholder {
+    color: var(--text-tertiary);
+    font-size: 0.9rem;
 }
 
 .hint {
@@ -444,8 +506,16 @@ body {
 }
 
 /* ==================== PLAYER ==================== */
-.player-section {
+.player-wrapper {
     margin: 2rem 0;
+}
+
+.player-card {
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    box-shadow: var(--shadow-md);
 }
 
 .player-section h3 {
@@ -464,13 +534,19 @@ video,
 audio {
     width: 100%;
     border-radius: var(--radius-md);
+    display: none;
+}
+
+video:not([src=""]),
+audio:not([src=""]) {
+    display: block;
 }
 
 .player-placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 300px;
+    min-height: 200px;
     background: linear-gradient(135deg, rgba(255, 107, 53, 0.05) 0%, rgba(102, 126, 234, 0.05) 100%);
     border: 2px dashed var(--border-color);
     border-radius: var(--radius-md);
