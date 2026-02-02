@@ -78,37 +78,49 @@ function updateQualityOptions() {
     const selectedFormat = formatSelect.value;
     const isAudio = audioFormats.includes(selectedFormat);
     
-    // Mostrar/esconder grupos de qualidade
-    videoQualityGroup.style.display = isAudio ? 'none' : 'block';
-    audioQualityGroup.style.display = isAudio ? 'block' : 'none';
+    // Mostrar/esconder grupos de qualidade (se existirem no HTML)
+    if (videoQualityGroup && audioQualityGroup) {
+        videoQualityGroup.style.display = isAudio ? 'none' : 'block';
+        audioQualityGroup.style.display = isAudio ? 'block' : 'none';
+    }
     
     // Resetar seleção para a primeira qualidade disponível
-    qualitySelect.value = 'best';
+    if (qualitySelect) {
+        qualitySelect.value = 'best';
+    }
     
     console.log(`Formato selecionado: ${selectedFormat.toUpperCase()} (${isAudio ? 'Áudio' : 'Vídeo'})`);
 }
 
 function showLoader(button) {
-    const btnText = button.querySelector('.btn-text');
+    const btnText = button.querySelector('.btn-content') || button.querySelector('.btn-text');
     const loader = button.querySelector('.loader');
-    btnText.style.display = 'none';
-    loader.style.display = 'inline-block';
+    if (btnText) btnText.style.display = 'none';
+    if (loader) {
+        loader.classList.remove('hidden');
+        loader.style.display = 'inline-block';
+    }
     button.disabled = true;
 }
 
 function hideLoader(button) {
-    const btnText = button.querySelector('.btn-text');
+    const btnText = button.querySelector('.btn-content') || button.querySelector('.btn-text');
     const loader = button.querySelector('.loader');
-    btnText.style.display = 'inline';
-    loader.style.display = 'none';
+    if (btnText) btnText.style.display = 'inline-flex';
+    if (loader) {
+        loader.style.display = 'none';
+        loader.classList.add('hidden');
+    }
     button.disabled = false;
 }
 
 function showError(message) {
     errorMessage.textContent = `❌ ${message}`;
+    errorMessage.classList.remove('hidden');
     errorMessage.style.display = 'block';
     setTimeout(() => {
         errorMessage.style.display = 'none';
+        errorMessage.classList.add('hidden');
     }, 5000);
 }
 
@@ -151,6 +163,7 @@ async function fetchVideoInfo() {
     console.log('Enviando requisição para:', url);
     showLoader(fetchBtn);
     errorMessage.style.display = 'none';
+    errorMessage.classList.add('hidden');
 
     try {
         console.log('Fazendo fetch para /api/video-info...');
@@ -202,17 +215,22 @@ function displayVideoInfo(info) {
     } else {
         playlistBadge.classList.add('hidden');
     }
-    
+
+    videoSection.classList.remove('hidden');
     videoSection.style.display = 'block';
 
     // Mostrar capítulos ou mensagem de "sem capítulos"
     if (info.has_chapters && info.chapters.length > 0) {
+        chaptersContainer.classList.remove('hidden');
         chaptersContainer.style.display = 'block';
+        noChapters.classList.add('hidden');
         noChapters.style.display = 'none';
         displayChapters(info.chapters);
         updateDownloadInfo();
     } else {
+        chaptersContainer.classList.add('hidden');
         chaptersContainer.style.display = 'none';
+        noChapters.classList.remove('hidden');
         noChapters.style.display = 'block';
         downloadInfo.textContent = 'Será baixado o vídeo completo';
     }
@@ -302,7 +320,9 @@ async function startDownload() {
     const downloadType = document.querySelector('input[name="download-type"]:checked')?.value || 'chapters';
 
     showLoader(downloadBtn);
+    videoSection.classList.add('hidden');
     videoSection.style.display = 'none';
+    progressSection.classList.remove('hidden');
     progressSection.style.display = 'block';
     progressStatus.textContent = 'Iniciando download...';
 
@@ -333,7 +353,9 @@ async function startDownload() {
 
     } catch (error) {
         showError(error.message);
+        progressSection.classList.add('hidden');
         progressSection.style.display = 'none';
+        videoSection.classList.remove('hidden');
         videoSection.style.display = 'block';
     } finally {
         hideLoader(downloadBtn);
@@ -371,14 +393,18 @@ async function monitorDownloadProgress() {
         } catch (error) {
             clearInterval(progressInterval);
             showError(error.message);
+            progressSection.classList.add('hidden');
             progressSection.style.display = 'none';
+            videoSection.classList.remove('hidden');
             videoSection.style.display = 'block';
         }
     }, 1000);
 }
 
 function showDownloadComplete(files) {
+    progressSection.classList.add('hidden');
     progressSection.style.display = 'none';
+    completeSection.classList.remove('hidden');
     completeSection.style.display = 'block';
     
     downloadLinks.innerHTML = '';
@@ -430,10 +456,14 @@ function resetApp() {
     currentUrl = null;
     downloadId = null;
     
+    videoSection.classList.add('hidden');
+    progressSection.classList.add('hidden');
+    completeSection.classList.add('hidden');
     videoSection.style.display = 'none';
     progressSection.style.display = 'none';
     completeSection.style.display = 'none';
     errorMessage.style.display = 'none';
+    errorMessage.classList.add('hidden');
     
     progressBar.style.width = '0%';
     progressText.textContent = '0%';
@@ -520,6 +550,7 @@ async function clearHistory() {
         showError('✅ Histórico limpo com sucesso!');
         setTimeout(() => {
             errorMessage.style.display = 'none';
+            errorMessage.classList.add('hidden');
         }, 3000);
         
     } catch (error) {

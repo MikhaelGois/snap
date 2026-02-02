@@ -13,8 +13,16 @@ build/
 .env
 venv/
 env/
+.venv/
 .vscode/
 .idea/
 *.mp4
 *.webm
 *.mkv
+*.mp3
+*.m4a
+*.wav
+*.opus
+
+# FFmpeg portátil (será baixado automaticamente)
+ffmpeg_portable/

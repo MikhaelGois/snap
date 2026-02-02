@@ -1,36 +1,62 @@
-# YouTube Chapter Downloader 📹
+# Snap - Video Downloader 🎬
 
-Um downloader web moderno para vídeos do YouTube com suporte a seleção de capítulos individuais.
+Um downloader web moderno e inteligente para vídeos com suporte a capítulos, múltiplos formatos e interface elegante.
+
+## 🚀 Instalação Rápida (Funciona em Qualquer Máquina)
+
+### 1. Instalar Python 3.8+
+- **Windows**: [Download Python](https://www.python.org/downloads/)
+- **macOS**: `brew install python3`
+- **Linux**: `sudo apt install python3 python3-pip`
+
+### 2. Clonar o projeto
+```bash
+git clone https://github.com/MikhaelGois/snap.git
+cd snap
+```
+
+### 3. Instalar dependências
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Rodar a aplicação
+```bash
+python app.py
+```
+
+**Pronto!** A aplicação vai:
+- ✅ Abrir automaticamente em `http://localhost:5000`
+- ✅ Detectar o FFmpeg instalado no sistema
+- ✅ **Se não encontrar, baixar automaticamente o FFmpeg portátil**
+- ✅ Funcionar sem configuração adicional
 
 ## 🌟 Funcionalidades
 
-- ✅ Download de vídeos completos do YouTube
-- ✅ Detecção automática de capítulos
-- ✅ Seleção individual de capítulos para download
-- ✅ Interface web moderna e responsiva
-- ✅ Barra de progresso em tempo real
-- ✅ Download de múltiplos capítulos simultaneamente
+- 🎯 **Download Inteligente**: Vídeos completos ou capítulos individuais
+- 🎨 **Interface Moderna**: Design elegante com tema escuro
+- 📊 **Progresso em Tempo Real**: Acompanhe o download ao vivo
+- 🎭 **Badges de Sites**: Identificação visual de YouTube, Vimeo, etc.
+- 🎵 **Múltiplos Formatos**: MP4, WebM, MP3, M4A e mais
+- 📱 **Totalmente Responsivo**: Funciona em desktop, tablet e mobile
+- 🎬 **Player Integrado**: Reproduza áudio/vídeo direto no navegador
+- 📜 **Histórico**: Veja todos os seus downloads anteriores
+- 🔄 **Sem Configuração**: FFmpeg é baixado automaticamente se necessário
 
-## 📋 Pré-requisitos
+## 💡 FFmpeg Automático
 
-Antes de começar, você precisa ter instalado:
+A aplicação detecta automaticamente o FFmpeg em:
+- ✅ PATH do sistema
+- ✅ Instalações comuns (Chocolatey, Scoop, etc.)
+- ✅ Se não encontrar, **baixa automaticamente** uma versão portátil
 
-1. **Python 3.8+** - [Download Python](https://www.python.org/downloads/)
-2. **FFmpeg** - Necessário para dividir vídeos em capítulos
+**Você não precisa instalar nada manualmente!**
 
-### Instalando FFmpeg
+### (Opcional) Instalar FFmpeg Manualmente
+
+Se preferir instalar globalmente:
 
 #### Windows
-1. Baixe o FFmpeg do site oficial: https://ffmpeg.org/download.html
-2. Extraia o arquivo ZIP
-3. Adicione a pasta `bin` ao PATH do sistema:
-   - Pesquise "Variáveis de ambiente" no menu Iniciar
-   - Clique em "Variáveis de Ambiente"
-   - Em "Variáveis do sistema", encontre "Path" e clique em "Editar"
-   - Clique em "Novo" e adicione o caminho para a pasta `bin` do FFmpeg
-   - Exemplo: `C:\ffmpeg\bin`
-
-**OU use Chocolatey:**
 ```powershell
 choco install ffmpeg
 ```
@@ -40,14 +66,10 @@ choco install ffmpeg
 brew install ffmpeg
 ```
 
-#### Linux (Ubuntu/Debian)
+#### Linux
 ```bash
-sudo apt update
 sudo apt install ffmpeg
 ```
-
-### Verificando a instalação do FFmpeg
-```bash
 ffmpeg -version
 ```
 

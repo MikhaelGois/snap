@@ -10,7 +10,6 @@ import time
 import glob
 import json
 import tempfile
-import tempfile
 import shutil
 from io import BytesIO
 
@@ -23,57 +22,120 @@ DOWNLOAD_FOLDER.mkdir(exist_ok=True)
 
 download_files = {}
 
-# Tentar encontrar o FFmpeg instalado pelo winget
-def find_ffmpeg():
-    """Localiza o FFmpeg instalado no sistema ou usa yt-dlp bundled"""
-    # Primeiro, verificar se ffmpeg está no PATH
-    import shutil
-    ffmpeg_path = shutil.which('ffmpeg')
-    if ffmpeg_path:
-        return os.path.dirname(ffmpeg_path)
+# Detectar e configurar FFmpeg automaticamente
+def find_or_download_ffmpeg():
+    """Localiza o FFmpeg instalado ou baixa automaticamente"""
+    import platform
+    import urllib.request
+    import zipfile
+    import tarfile
     
-    possible_paths = [
-        r'C:\ffmpeg\ffmpeg-master-latest-win64-gpl\bin',  # Instalação manual
-        r'C:\ProgramData\chocolatey\bin',
-        r'C:\Program Files\FFmpeg\bin',
-        r'C:\FFmpeg\bin',
-        os.path.expanduser(r'~\scoop\apps\ffmpeg\current\bin'),
-        r'C:\Program Files\BtbN\ffmpeg\bin',
-        os.path.expanduser(r'~\AppData\Local\Microsoft\WinGet\Packages'),
-    ]
+    # Diretório local para FFmpeg portátil
+    local_ffmpeg_dir = Path(__file__).parent / 'ffmpeg_portable'
     
-    # Adicionar PATH do sistema
-    system_path = os.environ.get('PATH', '')
-    for path in system_path.split(os.pathsep):
-        if 'ffmpeg' in path.lower():
-            ffmpeg_exe = os.path.join(path, 'ffmpeg.exe')
-            if os.path.exists(ffmpeg_exe):
+    # Nome do executável dependendo do OS
+    ffmpeg_exe = 'ffmpeg.exe' if platform.system() == 'Windows' else 'ffmpeg'
+    
+    # 1. Verificar se já existe uma versão portátil no projeto
+    if local_ffmpeg_dir.exists():
+        for root, dirs, files in os.walk(local_ffmpeg_dir):
+            if ffmpeg_exe in files:
+                ffmpeg_path = os.path.join(root, ffmpeg_exe)
+                print(f"✅ FFmpeg portátil encontrado: {ffmpeg_path}")
+                return os.path.dirname(ffmpeg_path)
+    
+    # 2. Verificar se ffmpeg está no PATH do sistema
+    ffmpeg_system = shutil.which('ffmpeg')
+    if ffmpeg_system:
+        print(f"✅ FFmpeg encontrado no PATH: {ffmpeg_system}")
+        return os.path.dirname(ffmpeg_system)
+    
+    # 3. Verificar locais comuns de instalação (Windows)
+    if platform.system() == 'Windows':
+        possible_paths = [
+            r'C:\ffmpeg\ffmpeg-master-latest-win64-gpl\bin',
+            r'C:\ProgramData\chocolatey\bin',
+            r'C:\Program Files\FFmpeg\bin',
+            r'C:\FFmpeg\bin',
+            os.path.expanduser(r'~\scoop\apps\ffmpeg\current\bin'),
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(os.path.join(path, ffmpeg_exe)):
+                print(f"✅ FFmpeg encontrado: {path}")
                 return path
     
-    # Verificar paths conhecidos
-    for path in possible_paths:
-        if os.path.exists(path):
-            # Buscar recursivamente apenas 2 níveis
-            for root, dirs, files in os.walk(path):
-                if 'ffmpeg.exe' in files:
-                    return root
-                if root.count(os.sep) - path.count(os.sep) >= 2:
-                    del dirs[:]  # Não descer mais
+    # 4. Baixar FFmpeg automaticamente
+    print("⏬ FFmpeg não encontrado. Baixando versão portátil...")
+    try:
+        local_ffmpeg_dir.mkdir(exist_ok=True)
+        
+        if platform.system() == 'Windows':
+            # Download FFmpeg para Windows
+            url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+            zip_path = local_ffmpeg_dir / 'ffmpeg.zip'
+            
+            print(f"  Baixando de {url}...")
+            urllib.request.urlretrieve(url, zip_path)
+            
+            print("  Extraindo...")
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(local_ffmpeg_dir)
+            
+            zip_path.unlink()
+            
+            # Encontrar o executável extraído
+            for root, dirs, files in os.walk(local_ffmpeg_dir):
+                if ffmpeg_exe in files:
+                    ffmpeg_path = os.path.join(root, ffmpeg_exe)
+                    print(f"✅ FFmpeg instalado com sucesso: {ffmpeg_path}")
+                    return os.path.dirname(ffmpeg_path)
+        
+        elif platform.system() == 'Linux':
+            # Para Linux, baixar build estático
+            url = "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+            tar_path = local_ffmpeg_dir / 'ffmpeg.tar.xz'
+            
+            print(f"  Baixando de {url}...")
+            urllib.request.urlretrieve(url, tar_path)
+            
+            print("  Extraindo...")
+            with tarfile.open(tar_path, 'r:xz') as tar_ref:
+                tar_ref.extractall(local_ffmpeg_dir)
+            
+            tar_path.unlink()
+            
+            # Encontrar e dar permissão de execução
+            for root, dirs, files in os.walk(local_ffmpeg_dir):
+                if ffmpeg_exe in files:
+                    ffmpeg_path = os.path.join(root, ffmpeg_exe)
+                    os.chmod(ffmpeg_path, 0o755)
+                    print(f"✅ FFmpeg instalado com sucesso: {ffmpeg_path}")
+                    return os.path.dirname(ffmpeg_path)
+        
+        elif platform.system() == 'Darwin':  # macOS
+            print("⚠️ macOS detectado. Por favor, instale FFmpeg usando:")
+            print("   brew install ffmpeg")
+            return None
+            
+    except Exception as e:
+        print(f"❌ Erro ao baixar FFmpeg: {e}")
+        print("⚠️ Alguns recursos podem não funcionar sem FFmpeg.")
+        return None
     
     return None
 
 # Configurar caminho do FFmpeg
-FFMPEG_PATH = find_ffmpeg()
+FFMPEG_PATH = find_or_download_ffmpeg()
 FFMPEG_LOCATION = None
 
 if FFMPEG_PATH:
-    print(f"✅ FFmpeg encontrado em: {FFMPEG_PATH}")
-    FFMPEG_LOCATION = os.path.join(FFMPEG_PATH, 'ffmpeg.exe')
+    ffmpeg_exe = 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg'
+    FFMPEG_LOCATION = os.path.join(FFMPEG_PATH, ffmpeg_exe)
     os.environ['PATH'] = FFMPEG_PATH + os.pathsep + os.environ['PATH']
+    print(f"🎬 FFmpeg configurado: {FFMPEG_LOCATION}")
 else:
-    print("⚠️ FFmpeg não encontrado no sistema.")
-    print("ℹ️  Tentando usar FFmpeg bundled do yt-dlp...")
-    # yt-dlp pode usar seu próprio FFmpeg interno
+    print("⚠️ FFmpeg não disponível. Funcionalidades de corte de capítulos serão limitadas.")
     FFMPEG_LOCATION = None
 
 # Armazenar status de downloads em memória
@@ -286,7 +348,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
                 
                 # Caminho do FFmpeg
                 if FFMPEG_LOCATION:
-                    ffmpeg_cmd = os.path.join(FFMPEG_LOCATION, 'ffmpeg.exe')
+                    ffmpeg_cmd = FFMPEG_LOCATION
                 else:
                     ffmpeg_cmd = 'ffmpeg'
                 
