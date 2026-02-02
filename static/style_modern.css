@@ -121,6 +121,35 @@ body {
     align-items: center;
 }
 
+/* History Button Wrapper */
+.history-btn-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.history-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: linear-gradient(135deg, #FF6B35, #F7931E);
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.4);
+    border: 2px solid var(--bg-secondary);
+    pointer-events: none;
+}
+
+.history-badge.show {
+    display: flex;
+}
+
 .btn-icon {
     position: relative;
     width: 44px;

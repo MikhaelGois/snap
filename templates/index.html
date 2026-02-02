@@ -22,10 +22,12 @@
                     </div>
                 </div>
                 <div class="header-actions">
-                    <button id="history-btn" class="btn btn-icon" onclick="toggleHistory()" title="Histórico">
-                        <span>📜</span>
-                        <span class="badge-count" id="history-count" style="display: none;">0</span>
-                    </button>
+                    <div class="history-btn-wrapper">
+                        <button id="history-btn" class="btn btn-icon" onclick="toggleHistory()" title="Histórico de downloads">
+                            <span>📜</span>
+                        </button>
+                        <span class="history-badge" id="history-count">0</span>
+                    </div>
                 </div>
             </div>
         </header>

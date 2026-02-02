@@ -46,7 +46,7 @@ const playlistBadge = document.getElementById('playlist-badge');
 const playlistCount = document.getElementById('playlist-count');
 const siteBadge = document.getElementById('site-badge');
 const historyBtn = document.getElementById('history-btn');
-const historyCountBadge = document.querySelector('.badge-count');
+const historyCountBadge = document.getElementById('history-count');
 
 // Formatos de áudio e vídeo
 const audioFormats = ['mp3', 'm4a', 'wav', 'opus'];
@@ -833,9 +833,9 @@ async function loadHistoryCount() {
         
         if (data.success && data.history.length > 0 && historyCountBadge) {
             historyCountBadge.textContent = data.history.length;
-            historyCountBadge.style.display = 'flex';
+            historyCountBadge.classList.add('show');
         } else if (historyCountBadge) {
-            historyCountBadge.style.display = 'none';
+            historyCountBadge.classList.remove('show');
         }
     } catch (error) {
         console.error('Erro ao carregar contagem do histórico:', error);
