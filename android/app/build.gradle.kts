@@ -19,17 +19,42 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+        
+        // Manifest placeholders
+        manifestPlaceholders["appName"] = "Snap"
+    }
+
+    signingConfigs {
+        create("release") {
+            // Para produção, use variáveis de ambiente ou keystore.properties
+            // storeFile = file("release-keystore.jks")
+            // storePassword = System.getenv("KEYSTORE_PASSWORD")
+            // keyAlias = System.getenv("KEY_ALIAS")
+            // keyPassword = System.getenv("KEY_PASSWORD")
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // signingConfig = signingConfigs.getByName("release")
+            
+            // Build config fields
+            buildConfigField("String", "BUILD_TYPE", "\"release\"")
+            buildConfigField("boolean", "ENABLE_LOGGING", "false")
         }
         debug {
             isDebuggable = true
             applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            
+            buildConfigField("String", "BUILD_TYPE", "\"debug\"")
+            buildConfigField("boolean", "ENABLE_LOGGING", "true")
         }
     }
 

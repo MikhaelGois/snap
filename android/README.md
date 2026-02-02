@@ -1,6 +1,29 @@
-# Snap Android App
+# 📥 Snap - Video Downloader
 
-Native Android implementation of the Snap video downloader, built with Kotlin, Jetpack Compose, and MVVM architecture.
+<div align="center">
+  <p><strong>Downloader de Vídeos Simples e Eficiente para Android</strong></p>
+  
+  <p>
+    <img src="https://img.shields.io/badge/Android-10%2B-green?style=flat-square&logo=android" alt="Android 10+"/>
+    <img src="https://img.shields.io/badge/Kotlin-1.9.22-purple?style=flat-square&logo=kotlin" alt="Kotlin"/>
+    <img src="https://img.shields.io/badge/Jetpack%20Compose-1.6.0-blue?style=flat-square" alt="Compose"/>
+    <img src="https://img.shields.io/badge/Material%203-Yes-orange?style=flat-square" alt="Material 3"/>
+  </p>
+</div>
+
+## 📱 Sobre o Projeto
+
+**Snap** é um aplicativo Android moderno para download e gerenciamento de vídeos, desenvolvido com as mais recentes tecnologias do ecossistema Android. Interface intuitiva, notificações inteligentes e gerenciamento completo de downloads.
+
+### ✨ Principais Recursos
+
+- 🎯 **Download Rápido**: Cole a URL e baixe instantaneamente
+- 📊 **Gerenciamento Completo**: Histórico detalhado e estatísticas
+- 🔔 **Notificações Inteligentes**: Progresso em tempo real e personalização
+- 🎨 **Design Moderno**: Material Design 3 com tema claro/escuro
+- 📤 **Compartilhamento Fácil**: Arquivos, estatísticas e histórico
+- 🏠 **Widget**: Acesso rápido na tela inicial
+- 🔒 **Privacidade**: Sem coleta de dados, armazenamento local
 
 ## Project Structure
 
@@ -47,186 +70,169 @@ android/
 └── README.md (this file)
 ```
 
-## Architecture
+## 🚀 Começando
 
-### MVVM (Model-View-ViewModel)
-- **Model**: Data classes and repository layer
-- **View**: Jetpack Compose UI screens
-- **ViewModel**: State management and business logic
+### Pré-requisitos
 
-### Layers
-1. **Presentation Layer** (UI)
-   - Compose screens
-   - ViewModels (state management)
-   - Theme and components
+- **Android Studio**: Hedgehog | 2023.1.1 ou superior
+- **JDK**: 17 ou superior
+- **Android SDK**: API 34 (Android 14)
+- **Gradle**: 8.2 ou superior
 
-2. **Data Layer**
-   - Repository pattern
-   - Retrofit API service
-   - Data models
+### Instalação
 
-3. **Domain Layer** (Implicit)
-   - Use cases for download, playback, history
-   - Business logic abstraction
+1. **Clone o repositório**
 
-## Tech Stack
-
-### UI & Composition
-- **Jetpack Compose** 1.6.0 - Modern declarative UI
-- **Material Design 3** - Material 3 components
-- **Compose Navigation** - Screen navigation
-
-### Networking
-- **Retrofit 2.10.0** - REST client
-- **OkHttp 4.11.0** - HTTP client
-- **Kotlinx Serialization** - JSON serialization
-
-### Data & Storage
-- **Room 2.6.1** - Local database
-- **DataStore** - Preferences storage
-
-### Concurrency
-- **Kotlin Coroutines 1.7.3** - Async operations
-- **Flow** - Reactive streams
-
-### Lifecycle & State
-- **Jetpack ViewModel** 2.6.2 - State management
-- **Jetpack Lifecycle** 2.6.2 - Lifecycle awareness
-
-### Media
-- **Media3 ExoPlayer** 1.1.1 - Video/audio playback
-- **Media3 UI** 1.1.1 - Player controls
-
-### Testing
-- **JUnit 4** - Unit testing
-- **MockK** - Mocking library
-- **Espresso** - UI testing
-
-## Setup Instructions
-
-### Prerequisites
-- Android Studio 2023.1+
-- JDK 17+
-- Android SDK 29+ (API level)
-- Kotlin 1.9.22+
-
-### Initial Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/MikhaelGois/snap.git
-   cd snap/android
-   ```
-
-2. **Open in Android Studio**
-   - File → Open
-   - Select the `android` directory
-   - Let Gradle sync complete
-
-3. **Configure Backend**
-   - Edit `app/src/main/kotlin/com/snap/data/api/ApiServiceFactory.kt`
-   - Update `DEFAULT_BASE_URL` if backend is not on localhost:5000
-   ```kotlin
-   private const val DEFAULT_BASE_URL = "http://your-server:5000"
-   ```
-
-4. **Build and Run**
-   ```bash
-   # Build debug APK
-   ./gradlew assembleDebug
-   
-   # Run on emulator or device
-   ./gradlew installDebug
-   ```
-
-## API Integration
-
-### Endpoints Used
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/` | Health check |
-| POST | `/api/video-info` | Get video metadata |
-| POST | `/api/download` | Start download |
-| GET | `/api/download-status/{id}` | Get progress |
-| GET | `/api/history` | Fetch history |
-| POST | `/api/history/clear` | Clear history |
-
-### Request/Response Models
-
-See `data/models/VideoModels.kt` for complete model definitions:
-- `VideoInfo` - Video metadata with chapters
-- `DownloadProgress` - Download status and progress
-- `DownloadHistory` - Historical downloads
-- `Chapter` - Chapter information
-
-## Features (Planned)
-
-### Phase 1: Core Functionality ✅
-- [x] Video info extraction
-- [x] Single file download
-- [x] Separated chapter download
-- [x] Download progress monitoring
-- [x] Download history
-
-### Phase 2: UI & UX
-- [ ] Input screen with URL validation
-- [ ] Video info display with chapter preview
-- [ ] Download options (format, quality, mode)
-- [ ] Real-time progress indicator
-- [ ] Completion notification
-- [ ] Media player integration
-- [ ] History listing
-
-### Phase 3: Advanced Features
-- [ ] Offline-first with sync
-- [ ] Batch URL downloads
-- [ ] Download pause/resume
-- [ ] File management
-- [ ] Quality auto-selection
-
-### Phase 4: Polish
-- [ ] Settings screen
-- [ ] Dark/light theme toggle
-- [ ] App shortcuts
-- [ ] Widget support
-- [ ] Share functionality
-
-## State Management
-
-### ViewModel States
-
-**VideoViewModel**
-```kotlin
-data class VideoInfoUiState(
-    val isLoading: Boolean = false,
-    val videoInfo: VideoInfo? = null,
-    val error: String? = null,
-    val selectedChapters: Set<Int> = emptySet(),
-    val selectedQuality: DownloadQuality = DownloadQuality.BEST,
-    val selectedFormat: DownloadFormat = DownloadFormat.MP4,
-    val downloadMode: DownloadMode = DownloadMode.SINGLE_FILE
-)
+```bash
+git clone https://github.com/seu-usuario/snap.git
+cd snap/android
 ```
 
-**DownloadViewModel**
-```kotlin
-data class DownloadUiState(
-    val isDownloading: Boolean = false,
-    val downloadId: String? = null,
-    val progress: DownloadProgress? = null,
-    val error: String? = null,
-    val isCompleted: Boolean = false
-)
+2. **Abra no Android Studio**
+
+```
+File → Open → Selecione a pasta 'android'
 ```
 
-**HistoryViewModel**
-```kotlin
-data class HistoryUiState(
-    val isLoading: Boolean = false,
-    val history: List<DownloadHistory> = emptyList(),
-    val error: String? = null,
-    val isClearing: Boolean = false,
+3. **Sincronize o Gradle**
+
+```
+File → Sync Project with Gradle Files
+```
+
+4. **Execute o app**
+
+```bash
+# Via Android Studio: Run → Run 'app'
+# Via linha de comando:
+./gradlew installDebug
+```
+
+## 🏗️ Arquitetura
+
+### Stack Tecnológica
+
+| Categoria | Tecnologia |
+|-----------|------------|
+| **Linguagem** | Kotlin 1.9.22 |
+| **UI Framework** | Jetpack Compose 1.6.0 |
+| **Design System** | Material Design 3 |
+| **Arquitetura** | MVVM + Clean Architecture |
+| **Injeção de Dependência** | Hilt 2.48 |
+| **Banco de Dados** | Room 2.6.1 |
+| **Networking** | Retrofit 2.10.0 + OkHttp |
+| **Coroutines** | Kotlin Coroutines 1.7.3 |
+| **Serialização** | Kotlinx Serialization 1.6.0 |
+| **Preferences** | DataStore Preferences |
+| **Widgets** | AppWidgetProvider |
+
+## 🛠️ Funcionalidades
+
+### 1. Download de Vídeos
+- Input de URL com validação
+- Download em segundo plano
+- Notificação de progresso em tempo real
+- Tratamento de erros e retry automático
+- Suporte para múltiplos formatos
+
+### 2. Histórico
+- Lista completa de downloads
+- Filtros por data e status
+- Busca por nome/URL
+- Ações em lote (deletar, compartilhar)
+- Visualização de detalhes
+
+### 3. Estatísticas
+- Total de downloads
+- Taxa de sucesso
+- Espaço utilizado
+- Vídeos por dia/semana/mês
+- Gráficos interativos
+
+### 4. Notificações
+- 5 canais personalizáveis (Download, Sucesso, Erro, Info, Progresso)
+- Som e vibração customizáveis
+- Ações rápidas (pausar, cancelar)
+- Notificação permanente durante download
+
+### 5. Personalização
+- Tema claro/escuro/automático
+- Dynamic Colors (Android 12+)
+- Níveis de contraste (normal, médio, alto)
+- Preferências de notificação individuais
+
+### 6. Compartilhamento
+- Compartilhar arquivos baixados
+- Exportar estatísticas (CSV/JSON)
+- Compartilhar histórico
+- Compartilhamento em lote
+
+### 7. Widget
+- Acesso rápido a downloads
+- Atualização automática
+- Design responsivo
+
+## 📦 Build de Produção
+
+### Gerar APK
+
+```bash
+./gradlew assembleRelease
+```
+
+**Output**: `app/build/outputs/apk/release/app-release.apk`
+
+### Gerar AAB (Google Play)
+
+```bash
+./gradlew bundleRelease
+```
+
+**Output**: `app/build/outputs/bundle/release/app-release.aab`
+
+### Documentação Completa
+
+Veja os guias detalhados:
+- **Build de Produção**: [RELEASE_BUILD_GUIDE.md](RELEASE_BUILD_GUIDE.md)
+- **Publicação Play Store**: [PLAY_STORE_CHECKLIST.md](PLAY_STORE_CHECKLIST.md)
+
+## 🧪 Testes
+
+### Executar Testes Unitários
+
+```bash
+./gradlew test
+```
+
+### Executar Testes Instrumentados
+
+```bash
+./gradlew connectedAndroidTest
+```
+
+## 📊 Status do Projeto
+
+- ✅ **Fase 1-4**: Infraestrutura, UI, Download, Database
+- ✅ **Fase 5**: UI/UX Polishing
+- ✅ **Fase 6**: Compartilhamento
+- ✅ **Fase 7**: Widgets e Temas
+- ✅ **Fase 8**: Sistema de Notificações Avançado
+- ✅ **Fase 9**: Produção e Otimização
+- 🚀 **Pronto para publicação na Play Store!**
+## 🙏 Agradecimentos
+
+- [Jetpack Compose](https://developer.android.com/jetpack/compose) - UI Framework
+- [Material Design 3](https://m3.material.io/) - Design System
+- [Hilt](https://dagger.dev/hilt/) - Dependency Injection
+- [Room](https://developer.android.com/training/data-storage/room) - Database
+- [Retrofit](https://square.github.io/retrofit/) - HTTP Client
+
+---
+
+<div align="center">
+  <p>Feito com ❤️ e ☕</p>
+  <p>© 2024 Snap. Todos os direitos reservados.</p>
+</div>
     val clearMessage: String? = null
 )
 ```
@@ -341,59 +347,20 @@ For issues or questions:
 - Advanced filtering and search
 - Batch processing improvements
 - Accessibility enhancements
-- Public Play Store release
-
-**Q3 2026**
-- Widget support
-- Deep linking improvements
-- Performance optimizations
-- Advanced media player features
-
-## Architecture Diagram
-
-```
-┌─────────────────────────────┐
-│      Compose UI Screens     │
-│  (InputScreen, InfoScreen,  │
-│  DownloadScreen, HistScreen)│
-└──────────────┬──────────────┘
-               │
-┌──────────────▼──────────────┐
-│      ViewModels             │
-│ (VideoVM, DownloadVM,       │
-│  HistoryVM)                 │
-└──────────────┬──────────────┘
-               │
-┌──────────────▼──────────────┐
-│   VideoRepository           │
-│  (Result<T> wrapper)        │
-└──────────────┬──────────────┘
-               │
-┌──────────────▼──────────────┐
-│  SnapApiService (Retrofit)  │
-│  (HTTP calls to backend)    │
-└──────────────┬──────────────┘
-               │
-     ┌─────────┴─────────┐
-     │                   │
-┌────▼────┐        ┌────▼────┐
-│ Network │        │ Serializ │
-│(OkHttp) │        │(JSON)   │
-└─────────┘        └─────────┘
-```
-
-## Next Steps
-
-1. **Implement Input Screen** - URL entry and validation
-2. **Implement Video Info Screen** - Display chapters with preview
-3. **Implement Download Screen** - Progress bar and file completion
-4. **Integrate Media Player** - Play downloaded media
-5. **Setup Local Database** - Offline history storage
-6. **Add Notifications** - Download completion alerts
-7. **Testing** - Unit and integration tests
-8. **Documentation** - API documentation and guides
 
 ---
 
-**Last Updated**: February 2026
-**Version**: 1.0.0-alpha
+## 🙏 Agradecimentos
+
+- [Jetpack Compose](https://developer.android.com/jetpack/compose) - UI Framework
+- [Material Design 3](https://m3.material.io/) - Design System
+- [Hilt](https://dagger.dev/hilt/) - Dependency Injection
+- [Room](https://developer.android.com/training/data-storage/room) - Database
+- [Retrofit](https://square.github.io/retrofit/) - HTTP Client
+
+---
+
+<div align="center">
+  <p>Feito com ❤️ e ☕</p>
+  <p>© 2024 Snap. Todos os direitos reservados.</p>
+</div>
