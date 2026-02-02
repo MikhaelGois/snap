@@ -19,6 +19,7 @@ import javax.inject.Inject
  * - Filtrar downloads
  * - Deletar downloads
  * - Fornecer estatísticas
+ * - Gerenciar seleção em batch
  */
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
@@ -38,6 +39,10 @@ class HistoryViewModel @Inject constructor(
     val totalSize: StateFlow<Long> = _totalSize.asStateFlow()
     
     private val _totalCount = MutableStateFlow(0)
+    val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
+    
+    private val _selectedItems = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedItems: StateFlow<Set<Long>> = _selectedItems.asStateFlow()
     val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
     
     init {
@@ -183,5 +188,155 @@ class HistoryViewModel @Inject constructor(
             bytesPerSecond >= 1024 -> String.format("%.2f KB/s", bytesPerSecond / 1024.0)
             else -> "$bytesPerSecond B/s"
         }
+    }
+    
+    /**
+     * Alterna seleção de um item
+     */
+    fun toggleSelection(id: Long) {
+        val current = _selectedItems.value.toMutableSet()
+        if (current.contains(id)) {
+            current.remove(id)
+        } else {
+            current.add(id)
+        }
+        _selectedItems.value = current
+    }
+    
+    /**
+     * Seleciona todos os itens
+     */
+    fun selectAll() {
+        _selectedItems.value = downloads.value.map { it.id }.toSet()
+    }
+    
+    /**
+     * Limpa seleção
+     */
+    fun clearSelection() {
+        _selectedItems.value = emptySet()
+    }
+    
+    /**
+     * Deleta items selecionados
+     */
+    fun deleteSelected() {
+        viewModelScope.launch {
+            try {
+                downloads.value
+                    .filter { it.id in _selectedItems.value }
+                    .forEach { downloadHistoryDao.delete(it) }
+                
+                clearSelection()
+                loadHistory()
+                loadStatistics()
+            } catch (e: Exception) {
+                _error.value = "Erro ao deletar items: ${e.message}"
+            }
+        }
+    }
+    
+    /**
+     * Filtra por status
+     */
+    fun filterByStatus(status: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val results = if (status == "ALL") {
+                    downloadHistoryDao.getAll()
+                } else {
+                    downloadHistoryDao.getByStatus(status)
+                }
+                _downloads.value = results
+            } catch (e: Exception) {
+                _error.value = "Erro ao filtrar: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Filtra por intervalo de datas
+     */
+    fun filterByDateRange(startTime: Long, endTime: Long) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val results = downloadHistoryDao.getByDateRange(startTime, endTime)
+                _downloads.value = results
+            } catch (e: Exception) {
+                _error.value = "Erro ao filtrar por data: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Filtra por tamanho mínimo
+     */
+    fun filterByMinSize(minSize: Long) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val results = downloadHistoryDao.getAll()
+                    .filter { it.fileSize >= minSize }
+                _downloads.value = results
+            } catch (e: Exception) {
+                _error.value = "Erro ao filtrar por tamanho: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Filtra por tamanho máximo
+     */
+    fun filterByMaxSize(maxSize: Long) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val results = downloadHistoryDao.getAll()
+                    .filter { it.fileSize <= maxSize }
+                _downloads.value = results
+            } catch (e: Exception) {
+                _error.value = "Erro ao filtrar por tamanho: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Filtra por formato
+     */
+    fun filterByFormat(format: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                val results = if (format == "ALL") {
+                    downloadHistoryDao.getAll()
+                } else {
+                    downloadHistoryDao.getAll()
+                        .filter { it.format.equals(format, ignoreCase = true) }
+                }
+                _downloads.value = results
+            } catch (e: Exception) {
+                _error.value = "Erro ao filtrar por formato: ${e.message}"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    /**
+     * Reseta filtros (carrega todos)
+     */
+    fun resetFilters() {
+        loadHistory()
+        clearSelection()
     }
 }

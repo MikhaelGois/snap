@@ -11,6 +11,8 @@ import com.snap.ui.screen.DownloadScreen
 import com.snap.ui.screen.HistoryScreen
 import com.snap.ui.screen.InputScreen
 import com.snap.ui.screen.VideoInfoScreen
+import com.snap.ui.screen.StatisticsScreen
+import com.snap.ui.screen.FilterScreen
 import com.snap.ui.viewmodel.DownloadViewModel
 import com.snap.ui.viewmodel.HistoryViewModel
 import com.snap.ui.viewmodel.VideoViewModel
@@ -78,7 +80,29 @@ fun SnapNavigation() {
             val historyViewModel: HistoryViewModel = hiltViewModel()
             
             HistoryScreen(
-                viewModel = historyViewModel
+                viewModel = historyViewModel,
+                onStatisticsClick = {
+                    navController.navigate(SnapScreen.Statistics.route)
+                },
+                onFilterClick = {
+                    navController.navigate(SnapScreen.Filter.route)
+                }
+            )
+        }
+        
+        composable(SnapScreen.Statistics.route) {
+            StatisticsScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        
+        composable(SnapScreen.Filter.route) {
+            FilterScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
             )
         }
     }
@@ -89,4 +113,6 @@ sealed class SnapScreen(val route: String) {
     data object VideoInfo : SnapScreen("video_info")
     data object Download : SnapScreen("download")
     data object History : SnapScreen("history")
+    data object Statistics : SnapScreen("statistics")
+    data object Filter : SnapScreen("filter")
 }

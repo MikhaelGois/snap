@@ -5,7 +5,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.RingtoneManager
 import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.snap.MainActivity
@@ -14,13 +17,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * NotificationManager - Gerencia notificações de download
+ * DownloadNotificationManager - Gerencia notificações de download
  * 
  * Responsabilidades:
  * - Criar canais de notificação
  * - Mostrar notificações de progresso
  * - Mostrar notificações de conclusão
  * - Mostrar notificações de erro
+ * - Gerenciar sons e vibração
  * - Gerenciar ações de notificação
  */
 @Singleton
@@ -38,6 +42,7 @@ class DownloadNotificationManager @Inject constructor(
     }
     
     private val notificationManager = NotificationManagerCompat.from(context)
+    private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
     
     init {
         createNotificationChannel()
@@ -114,12 +119,11 @@ class DownloadNotificationManager @Inject constructor(
             .setContentIntent(
                 createOpenFilePendingIntent(filePath)
             )
-            .addAction(
-                0,
-                "Abrir",
-                createOpenFilePendingIntent(filePath)
-            )
             .build()
+        
+        // Toca som e vibra
+        playSound()
+        vibratePattern()
         
         notificationManager.notify(DOWNLOAD_COMPLETE_ID, notification)
         notificationManager.cancel(DOWNLOAD_NOTIFICATION_ID) // Remove progress notification
@@ -142,6 +146,9 @@ class DownloadNotificationManager @Inject constructor(
                 createPendingIntent()
             )
             .build()
+        
+        // Vibra para indicar erro
+        vibrateDevice(300)
         
         notificationManager.notify(DOWNLOAD_ERROR_ID, notification)
         notificationManager.cancel(DOWNLOAD_NOTIFICATION_ID) // Remove progress notification
@@ -192,6 +199,61 @@ class DownloadNotificationManager @Inject constructor(
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+    
+    /**
+     * Toca som de notificação
+     */
+    private fun playSound() {
+        try {
+            val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val ringtone = RingtoneManager.getRingtone(context, soundUri)
+            ringtone?.play()
+        } catch (e: Exception) {
+            // Falha silenciosa se som não estiver disponível
+        }
+    }
+    
+    /**
+     * Vibra o dispositivo
+     */
+    private fun vibrateDevice(duration: Long = 200) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(
+                    VibrationEffect.createOneShot(
+                        duration,
+                        VibrationEffect.DEFAULT_AMPLITUDE
+                    )
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(duration)
+            }
+        } catch (e: Exception) {
+            // Falha silenciosa se vibração não estiver disponível
+        }
+    }
+    
+    /**
+     * Vibra com padrão (para conclusão)
+     */
+    private fun vibratePattern() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0, 100, 100, 100), // pausa, vibra, pausa, vibra
+                        -1 // não repetir
+                    )
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(longArrayOf(0, 100, 100, 100), -1)
+            }
+        } catch (e: Exception) {
+            // Falha silenciosa
+        }
     }
     
     /**

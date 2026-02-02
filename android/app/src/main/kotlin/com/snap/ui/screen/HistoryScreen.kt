@@ -37,6 +37,8 @@ import java.util.Locale
 @Composable
 fun HistoryScreen(
     viewModel: HistoryViewModel,
+    onStatisticsClick: () -> Unit = {},
+    onFilterClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val downloads by viewModel.downloads.collectAsState()
@@ -86,6 +88,38 @@ fun HistoryScreen(
                         contentDescription = "Clear all",
                         tint = MaterialTheme.colorScheme.error
                     )
+                }
+            }
+        }
+        
+        // Filter and Statistics buttons
+        if (downloads.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onFilterClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(40.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Icon(Icons.Default.Search, "Filtros", modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Filtros")
+                }
+                
+                Button(
+                    onClick = onStatisticsClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(40.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Estatísticas")
                 }
             }
         }

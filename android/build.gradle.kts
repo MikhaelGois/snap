@@ -8,6 +8,12 @@ plugins {
 }
 
 allprojects {
+    plugins.withId("com.android.application") {
+        plugins.apply("com.android.application")
+    }
+}
+
+pluginManagement {
     repositories {
         google()
         mavenCentral()
