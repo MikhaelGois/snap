@@ -31,5 +31,6 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SnapApp() {
-    SnapNavigation()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    SnapNavigation(context)
 }

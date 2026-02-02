@@ -13,9 +13,12 @@ import com.snap.ui.screen.InputScreen
 import com.snap.ui.screen.VideoInfoScreen
 import com.snap.ui.screen.StatisticsScreen
 import com.snap.ui.screen.FilterScreen
+import com.snap.ui.screen.SettingsScreen
+import com.snap.ui.theme.ThemeManager
 import com.snap.ui.viewmodel.DownloadViewModel
 import com.snap.ui.viewmodel.HistoryViewModel
 import com.snap.ui.viewmodel.VideoViewModel
+import android.content.Context
 
 /**
  * Navigation - Define as rotas e fluxo de navegação da aplicação
@@ -28,8 +31,9 @@ import com.snap.ui.viewmodel.VideoViewModel
  */
 
 @Composable
-fun SnapNavigation() {
+fun SnapNavigation(context: Context) {
     val navController = rememberNavController()
+    val themeManager = remember { ThemeManager(context) }
     
     NavHost(
         navController = navController,
@@ -105,6 +109,15 @@ fun SnapNavigation() {
                 }
             )
         }
+        
+        composable(SnapScreen.Settings.route) {
+            SettingsScreen(
+                themeManager = themeManager,
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
     }
 }
 
@@ -115,4 +128,5 @@ sealed class SnapScreen(val route: String) {
     data object History : SnapScreen("history")
     data object Statistics : SnapScreen("statistics")
     data object Filter : SnapScreen("filter")
+    data object Settings : SnapScreen("settings")
 }

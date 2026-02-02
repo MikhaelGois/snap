@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorPrimary"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- App Icon -->
+    <ImageView
+        android:id="@+id/widget_icon"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:contentDescription="@string/app_name"
+        android:src="@drawable/ic_launcher_foreground" />
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="Snap"
+        android:textColor="?attr/colorOnPrimary"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <!-- Subtitle -->
+    <TextView
+        android:id="@+id/widget_subtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Download Rápido"
+        android:textColor="?attr/colorOnPrimary"
+        android:textSize="12sp" />
+
+    <!-- Open App Button -->
+    <Button
+        android:id="@+id/widget_button"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="16dp"
+        android:text="Abrir Snap" />
+
+    <!-- Last Download Info -->
+    <TextView
+        android:id="@+id/widget_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:text="Toque para começar"
+        android:textColor="?attr/colorOnPrimary"
+        android:textSize="10sp" />
+
+</LinearLayout>

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ fun HistoryScreen(
     viewModel: HistoryViewModel,
     onStatisticsClick: () -> Unit = {},
     onFilterClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val downloads by viewModel.downloads.collectAsState()
@@ -85,16 +87,31 @@ fun HistoryScreen(
                 }
             }
             
-            if (downloads.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 IconButton(
-                    onClick = { showClearDialog = true },
+                    onClick = onSettingsClick,
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "Clear all",
-                        tint = MaterialTheme.colorScheme.error
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Configurações",
+                        tint = MaterialTheme.colorScheme.primary
                     )
+                }
+                
+                if (downloads.isNotEmpty()) {
+                    IconButton(
+                        onClick = { showClearDialog = true },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Clear all",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }
