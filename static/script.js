@@ -70,6 +70,13 @@ newDownloadBtn.addEventListener('click', resetApp);
 formatSelect.addEventListener('change', updateQualityOptions);
 if (historyBtn) historyBtn.addEventListener('click', toggleHistory);
 
+// Event listener para mudar tipo de download
+document.addEventListener('change', (e) => {
+    if (e.target.name === 'download-type') {
+        updateDownloadInfo();
+    }
+});
+
 // Carregar histórico ao iniciar
 loadHistoryCount();
 
@@ -288,15 +295,24 @@ function updateDownloadInfo() {
     const checkboxes = document.querySelectorAll('.chapter-checkbox');
     const selectedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
     const totalCount = checkboxes.length;
+    const downloadType = document.querySelector('input[name="download-type"]:checked')?.value || 'single';
     
     if (selectedCount === 0) {
         downloadInfo.textContent = 'Selecione pelo menos um capítulo';
         downloadBtn.disabled = true;
     } else if (selectedCount === totalCount) {
-        downloadInfo.textContent = 'Será baixado o vídeo completo';
+        if (downloadType === 'single') {
+            downloadInfo.textContent = '📦 Será baixado o vídeo completo como arquivo único';
+        } else {
+            downloadInfo.textContent = `📂 Serão baixados ${totalCount} capítulos separados`;
+        }
         downloadBtn.disabled = false;
     } else {
-        downloadInfo.textContent = `Serão baixados ${selectedCount} de ${totalCount} capítulos`;
+        if (downloadType === 'single') {
+            downloadInfo.textContent = `📦 Serão baixados ${selectedCount} capítulos mesclados em arquivo único`;
+        } else {
+            downloadInfo.textContent = `📂 Serão baixados ${selectedCount} de ${totalCount} capítulos separados`;
+        }
         downloadBtn.disabled = false;
     }
 }

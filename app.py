@@ -259,8 +259,12 @@ def format_time(seconds):
     secs = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
-def download_video(url, video_info, selected_chapters, download_id, output_format='mp4', quality='best'):
-    """Baixa o vídeo completo ou capítulos selecionados"""
+def download_video(url, video_info, selected_chapters, download_id, output_format='mp4', quality='best', download_type='chapters'):
+    """Baixa o vídeo completo ou capítulos selecionados
+    
+    Args:
+        download_type: 'single' para arquivo único, 'chapters' para separar em capítulos
+    """
     try:
         download_status[download_id]['status'] = 'downloading'
         download_status[download_id]['progress'] = 0
@@ -270,8 +274,16 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
         # Construir string de formato baseado na qualidade e formato
         format_string = build_format_string(output_format, quality)
         
-        if not selected_chapters or len(selected_chapters) == len(video_info['chapters']):
-            # Baixar vídeo completo
+        # Decidir se baixa como arquivo único ou separado
+        should_download_single = (
+            download_type == 'single' or 
+            not selected_chapters or 
+            not video_info.get('has_chapters') or
+            len(selected_chapters) == 0
+        )
+        
+        if should_download_single:
+            # Baixar vídeo completo como arquivo único
             output_path = DOWNLOAD_FOLDER / f"{video_title}.{output_format}"
             
             ydl_opts = {
@@ -455,10 +467,13 @@ def start_download():
         'files': []
     }
     
+    # Obter tipo de download (single ou chapters)
+    download_type = data.get('download_type', 'chapters')
+    
     # Iniciar download em thread separada
     thread = threading.Thread(
         target=download_video,
-        args=(url, video_info, selected_chapters, download_id, output_format, quality)
+        args=(url, video_info, selected_chapters, download_id, output_format, quality, download_type)
     )
     thread.start()
     
