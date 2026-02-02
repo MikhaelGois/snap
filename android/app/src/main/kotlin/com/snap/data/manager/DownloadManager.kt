@@ -4,12 +4,13 @@ import android.content.Context
 import com.snap.data.api.SnapApiService
 import com.snap.data.models.DownloadProgress
 import com.snap.util.FileManager
+import com.snap.util.DownloadNotificationManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import okhttp3.ResponseBody
-import retrofit2.Response
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
@@ -24,11 +25,13 @@ import javax.inject.Singleton
  * - Salvar arquivos
  * - Tratar erros
  * - Cancelar downloads
+ * - Mostrar notificações
  */
 @Singleton
 class DownloadManager @Inject constructor(
     private val apiService: SnapApiService,
     private val fileManager: FileManager,
+    private val notificationManager: DownloadNotificationManager,
     private val context: Context
 ) {
     
@@ -60,7 +63,8 @@ class DownloadManager @Inject constructor(
                         body = body,
                         tempFile = tempFile,
                         finalFile = finalFile,
-                        downloadId = downloadId
+                        downloadId = downloadId,
+                        fileName = fileName
                     ).collect { progress ->
                         emit(progress)
                     }
@@ -76,6 +80,10 @@ class DownloadManager @Inject constructor(
                             status = "Erro: Resposta vazia"
                         )
                     )
+                    notificationManager.showErrorNotification(
+                        fileName = fileName,
+                        errorMessage = "Resposta vazia do servidor"
+                    )
                 }
             } else {
                 emit(
@@ -88,6 +96,10 @@ class DownloadManager @Inject constructor(
                         timeRemaining = 0,
                         status = "Erro: ${response.code()} - ${response.message()}"
                     )
+                )
+                notificationManager.showErrorNotification(
+                    fileName = fileName,
+                    errorMessage = "${response.code()}: ${response.message()}"
                 )
             }
         } catch (e: Exception) {
@@ -102,7 +114,12 @@ class DownloadManager @Inject constructor(
                     status = "Erro: ${e.message}"
                 )
             )
+            notificationManager.showErrorNotification(
+                fileName = fileName,
+                errorMessage = e.message ?: "Erro desconhecido"
+            )
         }
+    }.flowOn(Dispatchers.IO)
     }.flowOn(Dispatchers.IO)
     
     /**
@@ -112,7 +129,8 @@ class DownloadManager @Inject constructor(
         body: ResponseBody,
         tempFile: File,
         finalFile: File,
-        downloadId: String
+        downloadId: String,
+        fileName: String
     ): Flow<DownloadProgress> = flow {
         try {
             val totalBytes = body.contentLength()
@@ -150,17 +168,29 @@ class DownloadManager @Inject constructor(
                             0L
                         }
                         
-                        emit(
-                            DownloadProgress(
+                        val progress = DownloadProgress(
+                            downloadId = downloadId,
+                            percentage = percentage,
+                            downloadedBytes = downloadedBytes,
+                            totalBytes = totalBytes,
+                            speed = speed,
+                            timeRemaining = timeRemaining,
+                            status = "Baixando..."
+                        )
+                        
+                        emit(progress)
+                        
+                        // Mostra notificação de progresso (a cada 10%)
+                        if (percentage % 10 == 0) {
+                            notificationManager.showProgressNotification(
                                 downloadId = downloadId,
+                                fileName = fileName,
                                 percentage = percentage,
                                 downloadedBytes = downloadedBytes,
                                 totalBytes = totalBytes,
-                                speed = speed,
-                                timeRemaining = timeRemaining,
-                                status = "Baixando..."
+                                speed = speed
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -180,6 +210,12 @@ class DownloadManager @Inject constructor(
                         status = "Concluído!"
                     )
                 )
+                
+                // Mostra notificação de conclusão
+                notificationManager.showCompletionNotification(
+                    fileName = fileName,
+                    filePath = finalFile.absolutePath
+                )
             } else {
                 emit(
                     DownloadProgress(
@@ -191,6 +227,11 @@ class DownloadManager @Inject constructor(
                         timeRemaining = 0,
                         status = "Erro ao salvar arquivo"
                     )
+                )
+                
+                notificationManager.showErrorNotification(
+                    fileName = fileName,
+                    errorMessage = "Falha ao mover arquivo"
                 )
             }
         } catch (e: Exception) {
@@ -206,12 +247,17 @@ class DownloadManager @Inject constructor(
                 )
             )
             
+            notificationManager.showErrorNotification(
+                fileName = fileName,
+                errorMessage = e.message ?: "Erro desconhecido"
+            )
+            
             // Limpa arquivo temporário
             if (tempFile.exists()) {
                 tempFile.delete()
             }
         }
-    }
+    }.flowOn(Dispatchers.IO)
     
     /**
      * Cancela um download
@@ -219,6 +265,7 @@ class DownloadManager @Inject constructor(
     fun cancelDownload(downloadId: String) {
         downloadJobs[downloadId]?.cancel()
         downloadJobs.remove(downloadId)
+        notificationManager.cancelProgressNotification()
     }
     
     /**
@@ -229,6 +276,7 @@ class DownloadManager @Inject constructor(
             job.cancel()
         }
         downloadJobs.clear()
+        notificationManager.cancelAllNotifications()
     }
 }
 

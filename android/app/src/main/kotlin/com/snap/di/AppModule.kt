@@ -6,6 +6,7 @@ import com.snap.data.api.SnapApiService
 import com.snap.data.manager.DownloadManager
 import com.snap.data.repository.VideoRepository
 import com.snap.util.FileManager
+import com.snap.util.DownloadNotificationManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,6 +22,7 @@ import javax.inject.Singleton
  * - VideoRepository
  * - DownloadManager
  * - FileManager
+ * - DownloadNotificationManager
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -47,6 +49,17 @@ object AppModule {
     }
 
     /**
+     * Fornece a instância de DownloadNotificationManager
+     */
+    @Singleton
+    @Provides
+    fun provideDownloadNotificationManager(
+        @ApplicationContext context: Context
+    ): DownloadNotificationManager {
+        return DownloadNotificationManager(context)
+    }
+
+    /**
      * Fornece a instância de DownloadManager
      */
     @Singleton
@@ -54,11 +67,13 @@ object AppModule {
     fun provideDownloadManager(
         apiService: SnapApiService,
         fileManager: FileManager,
+        notificationManager: DownloadNotificationManager,
         @ApplicationContext context: Context
     ): DownloadManager {
         return DownloadManager(
             apiService = apiService,
             fileManager = fileManager,
+            notificationManager = notificationManager,
             context = context
         )
     }
