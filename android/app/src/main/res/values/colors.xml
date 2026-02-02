@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Snap Brand Colors -->
+    <color name="snap_primary">#FF6B35</color>
+    <color name="snap_secondary">#F7931E</color>
+    <color name="snap_tertiary">#667eea</color>
+    <color name="snap_background">#0F1419</color>
+    <color name="snap_surface">#1A1F2B</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>
