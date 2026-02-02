@@ -2,7 +2,9 @@ package com.snap.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -10,10 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.snap.ui.viewmodel.HistoryViewModel
+import com.snap.util.ShareManager
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -32,11 +36,14 @@ import java.util.Locale
 @Composable
 fun StatisticsScreen(
     viewModel: HistoryViewModel,
+    onBackClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val downloads by viewModel.downloads.collectAsState()
     val totalSize by viewModel.totalSize.collectAsState()
     val totalCount by viewModel.totalCount.collectAsState()
+    val context = LocalContext.current
+    val shareManager = remember { ShareManager(context) }
     
     // Calcula estatísticas
     val completedCount = downloads.count { it.status == "COMPLETED" }
@@ -60,20 +67,47 @@ fun StatisticsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
     ) {
-        // Header
-        Text(
-            "Estatísticas de Downloads",
-            fontSize = 24.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 24.dp)
+        // Top App Bar
+        TopAppBar(
+            title = { Text("Estatísticas de Downloads", fontWeight = FontWeight.Bold) },
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+                }
+            },
+            actions = {
+                IconButton(
+                    onClick = {
+                        shareManager.shareStatistics(
+                            totalDownloads = totalCount,
+                            completedDownloads = completedCount,
+                            failedDownloads = failedCount,
+                            totalSize = totalSize,
+                            successRate = successRate.toFloat(),
+                            averageSpeed = avgSpeed.toFloat()
+                        )
+                    }
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = "Compartilhar")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                titleContentColor = MaterialTheme.colorScheme.onPrimary
+            )
         )
         
-        // Principais métricas
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
+            // Principais métricas
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
                 .padding(bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -316,16 +350,6 @@ private fun FormatStatRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        
-        LinearProgressIndicator(
-            progress = (percentage / 100f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp),
-            color = MaterialTheme.colorScheme.tertiary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(3.dp)
-        )
     }
 }
 

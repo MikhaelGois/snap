@@ -339,4 +339,18 @@ class HistoryViewModel @Inject constructor(
         loadHistory()
         clearSelection()
     }
+    
+    /**
+     * Obtém downloads selecionados
+     */
+    fun getSelectedDownloads(): List<DownloadHistoryEntity> {
+        return downloads.value.filter { it.id in _selectedItems.value }
+    }
+    
+    /**
+     * Verifica se há items selecionados
+     */
+    fun hasSelectedItems(): Boolean {
+        return _selectedItems.value.isNotEmpty()
+    }
 }
