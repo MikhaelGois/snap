@@ -539,4 +539,26 @@ def clear_history():
 if __name__ == '__main__':
     print("🚀 Iniciando YouTube Chapter Downloader...")
     print("📱 Acesse: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    run_kwargs = {
+        'debug': True,
+        'host': '0.0.0.0',
+        'port': 5000,
+        'use_reloader': True,
+    }
+
+    # Evita reinicializações em loop por alterações no ambiente virtual/site-packages.
+    # Isso é comum no Windows quando watchdog observa arquivos dentro de .venv.
+    reloader_excludes = [
+        '*/.venv/*',
+        '*\\.venv\\*',
+        '*/site-packages/*',
+        '*\\site-packages\\*',
+        '*/__pycache__/*',
+        '*\\__pycache__\\*',
+    ]
+
+    try:
+        app.run(**run_kwargs, exclude_patterns=reloader_excludes)
+    except TypeError:
+        print("ℹ️ Versão do Werkzeug sem suporte a exclude_patterns; iniciando sem auto-reload.")
+        app.run(**{**run_kwargs, 'use_reloader': False})
