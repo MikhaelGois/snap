@@ -169,6 +169,94 @@ def sanitize_filename(filename):
     """Remove caracteres inválidos do nome do arquivo"""
     return re.sub(r'[<>:"/\\|?*]', '', filename)
 
+ANSI_ESCAPE_RE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+
+def strip_ansi(text: str) -> str:
+    """Remove códigos ANSI (cores) de mensagens de erro"""
+    return ANSI_ESCAPE_RE.sub('', text or '')
+
+def resolve_cookie_file():
+    """Resolve arquivo de cookies para yt-dlp, se existir"""
+    env_cookie = os.environ.get('YTDLP_COOKIES_FILE')
+    if env_cookie and os.path.exists(env_cookie):
+        return env_cookie
+
+    local_cookie = Path(__file__).parent / 'cookies.txt'
+    if local_cookie.exists():
+        return str(local_cookie)
+
+    return None
+
+def build_ydl_base_opts():
+    """Opções base do yt-dlp (headers, cookies, etc.)"""
+    opts = {
+        'socket_timeout': 30,
+        'geo_bypass': True,
+        'retries': 5,
+        'fragment_retries': 5,
+        'concurrent_fragment_downloads': 1,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-us,en;q=0.5',
+            'Sec-Fetch-Mode': 'navigate',
+            'Referer': 'https://www.youtube.com/',
+            'Origin': 'https://www.youtube.com',
+        },
+    }
+
+    cookie_file = resolve_cookie_file()
+    if cookie_file:
+        opts['cookiefile'] = cookie_file
+
+    cookies_from_browser = os.environ.get('YTDLP_COOKIES_FROM_BROWSER')
+    if cookies_from_browser:
+        opts['cookiesfrombrowser'] = cookies_from_browser
+
+    impersonate = os.environ.get('YTDLP_IMPERSONATE')
+    if impersonate:
+        opts['impersonate'] = impersonate
+
+    return opts
+
+def fallback_format_for(output_format):
+    """Formato de fallback para tentativas alternativas"""
+    if output_format in ['mp3', 'm4a', 'wav', 'opus']:
+        return 'bestaudio[ext=m4a]/bestaudio/best'
+    if output_format == 'mp4':
+        return 'best[ext=mp4]/best'
+    return 'best'
+
+def try_download_with_fallback(url, ydl_opts, output_format, download_id=None):
+    """Tenta download e faz fallback em caso de 403"""
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        return
+    except Exception as e:
+        error_text = str(e)
+        if 'HTTP Error 403' not in error_text:
+            raise
+
+        print("⚠️ 403 detectado. Tentando fallback de formato e cliente...")
+        fallback_opts = {
+            **ydl_opts,
+            'format': fallback_format_for(output_format),
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web', 'tv_embedded']
+                }
+            },
+        }
+
+        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+            ydl.download([url])
+
 def build_format_string(output_format, quality):
     """Constrói a string de formato para yt-dlp baseado no formato e qualidade"""
     # Formatos de áudio
@@ -201,18 +289,12 @@ def get_video_info(url, extract_playlist=False):
     """Extrai informações do vídeo/playlist incluindo capítulos"""
     print(f"🔍 Buscando informações para: {url}")
     ydl_opts = {
+        **build_ydl_base_opts(),
         'quiet': False,
         'no_warnings': False,
         'extract_flat': 'in_playlist' if extract_playlist else False,
         'skip_download': True,
-        'socket_timeout': 30,
         'noplaylist': not extract_playlist,
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-us,en;q=0.5',
-            'Sec-Fetch-Mode': 'navigate',
-        },
     }
     
     try:
@@ -249,7 +331,7 @@ def get_video_info(url, extract_playlist=False):
     except Exception as e:
         return {
             'success': False,
-            'error': str(e)
+            'error': strip_ansi(str(e))
         }
 
 def format_time(seconds):
@@ -287,17 +369,12 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
             output_path = DOWNLOAD_FOLDER / f"{video_title}.{output_format}"
             
             ydl_opts = {
+                **build_ydl_base_opts(),
                 'format': format_string,
                 'outtmpl': str(output_path),
                 'progress_hooks': [lambda d: update_progress(d, download_id)],
                 'merge_output_format': output_format if output_format in ['mp4', 'mkv', 'webm'] else 'mp4',
                 'noplaylist': True,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-us,en;q=0.5',
-                    'Sec-Fetch-Mode': 'navigate',
-                },
             }
             
             # Adicionar FFmpeg location se disponível
@@ -312,8 +389,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
                     'preferredquality': '192' if output_format == 'mp3' else '0',
                 }]
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            try_download_with_fallback(url, ydl_opts, output_format, download_id)
             
             download_status[download_id]['status'] = 'completed'
             download_status[download_id]['progress'] = 100
@@ -323,25 +399,19 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
             temp_video = DOWNLOAD_FOLDER / f"temp_{download_id}.mp4"
             
             ydl_opts = {
+                **build_ydl_base_opts(),
                 'format': format_string,
                 'outtmpl': str(temp_video),
                 'progress_hooks': [lambda d: update_progress(d, download_id)],
                 'merge_output_format': 'mp4',
                 'noplaylist': True,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-us,en;q=0.5',
-                    'Sec-Fetch-Mode': 'navigate',
-                },
             }
             
             # Adicionar FFmpeg location se disponível
             if FFMPEG_LOCATION:
                 ydl_opts['ffmpeg_location'] = FFMPEG_LOCATION
             
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+            try_download_with_fallback(url, ydl_opts, output_format, download_id)
             
             # Dividir em capítulos selecionados
             download_status[download_id]['status'] = 'splitting'
@@ -412,7 +482,7 @@ def download_video(url, video_info, selected_chapters, download_id, output_forma
             
     except Exception as e:
         download_status[download_id]['status'] = 'error'
-        download_status[download_id]['error'] = str(e)
+        download_status[download_id]['error'] = strip_ansi(str(e))
 
 def update_progress(d, download_id):
     """Atualiza o progresso do download"""
