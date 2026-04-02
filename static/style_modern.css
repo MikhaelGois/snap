@@ -115,6 +115,20 @@ body {
     margin-top: 0.25rem;
 }
 
+.version-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    background: var(--primary-gradient);
+    color: #fff;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    vertical-align: middle;
+    margin-left: 0.4rem;
+    letter-spacing: 0.03em;
+    -webkit-text-fill-color: #fff;
+}
+
 .header-actions {
     display: flex;
     gap: 1rem;
@@ -1020,6 +1034,13 @@ audio:not([src=""]) {
     border-radius: var(--radius-sm);
     color: #FF6B35;
     font-family: 'Courier New', monospace;
+}
+
+.footer-version {
+    font-size: 0.75rem;
+    opacity: 0.5;
+    margin-top: 0.75rem !important;
+    letter-spacing: 0.05em;
 }
 
 /* ==================== LOADER ==================== */

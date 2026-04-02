@@ -15,6 +15,8 @@ from io import BytesIO
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 import sys
 
+APP_VERSION = '1.3.0'
+
 try:
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -943,7 +945,7 @@ def cookie_clear():
         return jsonify({'success': False, 'error': f'Falha ao remover cookies: {e}'}), 500
 
 if __name__ == '__main__':
-    print("🚀 Iniciando YouTube Chapter Downloader...")
+    print(f"🚀 Iniciando YouTube Chapter Downloader v{APP_VERSION}...")
     print("📱 Acesse: http://localhost:5000")
     run_kwargs = {
         'debug': True,
