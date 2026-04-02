@@ -295,7 +295,15 @@
         <footer class="footer">
             <p>🌍 Suporta: YouTube, Vimeo, Dailymotion, SoundCloud e mais de 1000 sites</p>
             <p class="footer-note">💾 Downloads salvos em: <code>downloads/</code></p>
-            <p class="footer-author">✦ Desenvolvido por <span class="author-name">Mikhael Gois</span> ✦</p>
+            <div class="creator-id">
+                <img
+                    class="creator-avatar"
+                    src="{{ url_for('static', filename='creator.jpg') }}"
+                    alt="Criador Mikhael Gois"
+                    onerror="this.onerror=null;this.src='{{ url_for('static', filename='creator-placeholder.svg') }}';"
+                >
+                <p class="footer-author">✦ Desenvolvido por <span class="author-name">Mikhael Gois</span> ✦</p>
+            </div>
             <p class="footer-version">v1.3.0 • © 2026 Video Splitter Downloader</p>
         </footer>
     </div>

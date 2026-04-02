@@ -1189,6 +1189,24 @@ video:not([src=""]), audio:not([src=""]) { display: block; }
     opacity: 0.85;
 }
 
+.creator-id {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+    margin-top: 0.65rem;
+}
+
+.creator-avatar {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--neon-pink);
+    box-shadow: var(--glow-pink), 0 0 0 2px rgba(0, 245, 255, 0.25);
+    background: var(--bg-secondary);
+}
+
 .author-name {
     color: var(--neon-pink);
     text-shadow: var(--glow-pink);
@@ -1240,4 +1258,8 @@ video:not([src=""]), audio:not([src=""]) { display: block; }
     #youtube-url { font-size: 16px; }
     .logo-section h1 { font-size: 1.2rem; }
     body::before { height: 35vh; }
+    .creator-id {
+        flex-direction: column;
+        gap: 0.45rem;
+    }
 }
