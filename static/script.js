@@ -657,7 +657,11 @@ function resetApp() {
     currentVideoInfo = null;
     currentUrl = null;
     downloadId = null;
-    
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+
     videoSection.classList.add('hidden');
     progressSection.classList.add('hidden');
     completeSection.classList.add('hidden');
@@ -668,9 +672,12 @@ function resetApp() {
     playerSection.style.display = 'none';
     errorMessage.style.display = 'none';
     errorMessage.classList.add('hidden');
-    
+
     progressBar.style.width = '0%';
     progressText.textContent = '0%';
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => urlInput && urlInput.focus(), 400);
 }
 
 // Funções de modo Single/Multi
