@@ -12,6 +12,21 @@ import json
 import tempfile
 import shutil
 from io import BytesIO
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+import sys
+
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
+try:
+    import browser_cookie3
+except Exception:
+    browser_cookie3 = None
 
 app = Flask(__name__)
 CORS(app)
@@ -21,6 +36,8 @@ DOWNLOAD_FOLDER = Path(__file__).parent / 'downloads'
 DOWNLOAD_FOLDER.mkdir(exist_ok=True)
 
 download_files = {}
+GENERATED_COOKIES_FILE = DOWNLOAD_FOLDER / '_browser_cookies.txt'
+_generated_cookies_mtime = 0
 
 # Detectar e configurar FFmpeg automaticamente
 def find_or_download_ffmpeg():
@@ -145,6 +162,10 @@ download_status = {}
 DOWNLOAD_HISTORY_FILE = DOWNLOAD_FOLDER / 'history.json'
 download_history = []
 
+def get_cookie_file_path():
+    """Retorna caminho padrão do cookies.txt do projeto"""
+    return Path(__file__).parent / 'cookies.txt'
+
 def load_download_history():
     """Carrega histórico de downloads"""
     global download_history
@@ -175,15 +196,212 @@ def strip_ansi(text: str) -> str:
     """Remove códigos ANSI (cores) de mensagens de erro"""
     return ANSI_ESCAPE_RE.sub('', text or '')
 
+def is_youtube_url(url: str) -> bool:
+    """Verifica se a URL pertence ao YouTube"""
+    try:
+        host = (urlparse(url).hostname or '').lower()
+        return 'youtube.com' in host or 'youtu.be' in host
+    except Exception:
+        return False
+
+def normalize_video_url(url: str, extract_playlist: bool = False) -> str:
+    """Normaliza URL do YouTube para evitar contexto de playlist em modo single"""
+    if not url or extract_playlist or not is_youtube_url(url):
+        return url
+
+    try:
+        parsed = urlparse(url)
+        filtered_query = [
+            (k, v)
+            for (k, v) in parse_qsl(parsed.query, keep_blank_values=True)
+            if k.lower() not in {'list', 'index', 'pp', 'start_radio'}
+        ]
+        return urlunparse(parsed._replace(query=urlencode(filtered_query, doseq=True)))
+    except Exception:
+        return url
+
+def parse_cookiesfrombrowser(value: str):
+    """Converte string de cookiesfrombrowser para formato aceito pelo yt-dlp"""
+    if not value:
+        return None
+    parts = [part.strip() for part in value.split(':') if part.strip()]
+    if not parts:
+        return None
+    return tuple(parts)
+
+def get_browser_cookie_candidates():
+    """Lista navegadores para tentativa automática de extração de cookies"""
+    candidates = []
+
+    env_browser = os.environ.get('YTDLP_COOKIES_FROM_BROWSER')
+    if env_browser:
+        candidates.append(env_browser.strip())
+
+    # Ordem priorizada para Windows
+    candidates.extend(['edge', 'chrome', 'firefox', 'brave', 'opera', 'vivaldi'])
+
+    # Remove duplicados preservando ordem
+    unique = []
+    seen = set()
+    for browser in candidates:
+        key = (browser or '').lower()
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(browser)
+
+    return unique
+
+def is_auth_or_bot_error(error_text: str) -> bool:
+    """Detecta erros comuns de bloqueio/autenticação do YouTube"""
+    text = (error_text or '').lower()
+    patterns = [
+        'sign in to confirm you\'re not a bot',
+        'use --cookies-from-browser',
+        'use --cookies',
+        'how-do-i-pass-cookies-to-yt-dlp',
+        'this video is unavailable',
+        'http error 429',
+    ]
+    return any(p in text for p in patterns)
+
+def build_auth_help_message(error_text: str) -> str:
+    """Mensagem amigável para erros de autenticação no YouTube"""
+    cleaned = strip_ansi(error_text)
+    return (
+        "YouTube bloqueou esta requisição e pediu verificação anti-bot. "
+        "O app já tentou usar cookies do navegador automaticamente, mas não conseguiu. "
+        "Feche o YouTube no navegador, tente novamente e, se persistir, configure um cookies.txt "
+        "na raiz do projeto ou defina YTDLP_COOKIES_FROM_BROWSER (ex.: edge ou chrome). "
+        f"\n\nDetalhe técnico: {cleaned}"
+    )
+
+def try_extract_with_browser_cookies(url, base_opts):
+    """Tenta extrair informações usando cookies do navegador"""
+    last_error = None
+    for browser in get_browser_cookie_candidates():
+        browser_tuple = parse_cookiesfrombrowser(browser)
+        if not browser_tuple:
+            continue
+
+        retry_opts = {
+            **base_opts,
+            'cookiesfrombrowser': browser_tuple,
+        }
+
+        try:
+            print(f"🔐 Tentando extração com cookies do navegador: {browser}")
+            with yt_dlp.YoutubeDL(retry_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                return info, None
+        except Exception as e:
+            last_error = e
+
+    return None, last_error
+
+def try_download_with_browser_cookies(url, base_opts):
+    """Tenta baixar usando cookies do navegador"""
+    last_error = None
+    for browser in get_browser_cookie_candidates():
+        browser_tuple = parse_cookiesfrombrowser(browser)
+        if not browser_tuple:
+            continue
+
+        retry_opts = {
+            **base_opts,
+            'cookiesfrombrowser': browser_tuple,
+        }
+
+        try:
+            print(f"🔐 Tentando download com cookies do navegador: {browser}")
+            with yt_dlp.YoutubeDL(retry_opts) as ydl:
+                ydl.download([url])
+            return True, None
+        except Exception as e:
+            last_error = e
+
+    return False, last_error
+
 def resolve_cookie_file():
     """Resolve arquivo de cookies para yt-dlp, se existir"""
     env_cookie = os.environ.get('YTDLP_COOKIES_FILE')
     if env_cookie and os.path.exists(env_cookie):
         return env_cookie
 
-    local_cookie = Path(__file__).parent / 'cookies.txt'
+    local_cookie = get_cookie_file_path()
     if local_cookie.exists():
         return str(local_cookie)
+
+    return None
+
+def _to_netscape_cookie_line(cookie) -> str:
+    """Converte cookie para formato Netscape compatível com yt-dlp"""
+    domain = cookie.domain or ''
+    include_subdomains = 'TRUE' if domain.startswith('.') else 'FALSE'
+    path = cookie.path or '/'
+    secure = 'TRUE' if cookie.secure else 'FALSE'
+    expires = str(int(cookie.expires or 0))
+    name = cookie.name or ''
+    value = cookie.value or ''
+    return f"{domain}\t{include_subdomains}\t{path}\t{secure}\t{expires}\t{name}\t{value}"
+
+def export_browser_cookies_file(force: bool = False):
+    """Exporta cookies do navegador para arquivo Netscape (fallback do YouTube)"""
+    global _generated_cookies_mtime
+
+    if os.environ.get('YTDLP_DISABLE_BROWSER_COOKIE_EXPORT', '').lower() in {'1', 'true', 'yes'}:
+        return None
+
+    if not browser_cookie3:
+        return None
+
+    try:
+        if GENERATED_COOKIES_FILE.exists() and not force:
+            # Reusa por 15 minutos
+            if (time.time() - GENERATED_COOKIES_FILE.stat().st_mtime) < 900:
+                return str(GENERATED_COOKIES_FILE)
+    except Exception:
+        pass
+
+    browser_loaders = {
+        'edge': getattr(browser_cookie3, 'edge', None),
+        'chrome': getattr(browser_cookie3, 'chrome', None),
+        'chromium': getattr(browser_cookie3, 'chromium', None),
+        'firefox': getattr(browser_cookie3, 'firefox', None),
+        'brave': getattr(browser_cookie3, 'brave', None),
+        'opera': getattr(browser_cookie3, 'opera', None),
+        'vivaldi': getattr(browser_cookie3, 'vivaldi', None),
+    }
+
+    allowed_domains = (
+        '.youtube.com', 'youtube.com', '.google.com', 'google.com', '.youtu.be', 'youtu.be'
+    )
+
+    for browser in get_browser_cookie_candidates():
+        key = (browser or '').split(':', 1)[0].strip().lower()
+        loader = browser_loaders.get(key)
+        if not loader:
+            continue
+
+        try:
+            cookiejar = loader()
+            lines = ['# Netscape HTTP Cookie File']
+
+            for cookie in cookiejar:
+                domain = (cookie.domain or '').lower()
+                if any(domain.endswith(d) for d in allowed_domains):
+                    lines.append(_to_netscape_cookie_line(cookie))
+
+            if len(lines) <= 1:
+                continue
+
+            with open(GENERATED_COOKIES_FILE, 'w', encoding='utf-8', newline='\n') as f:
+                f.write('\n'.join(lines) + '\n')
+
+            _generated_cookies_mtime = time.time()
+            print(f"🍪 Cookies exportados de {browser} para: {GENERATED_COOKIES_FILE}")
+            return str(GENERATED_COOKIES_FILE)
+        except Exception as e:
+            print(f"⚠️ Falha ao exportar cookies de {browser}: {e}")
 
     return None
 
@@ -211,12 +429,16 @@ def build_ydl_base_opts():
     }
 
     cookie_file = resolve_cookie_file()
+    if not cookie_file:
+        cookie_file = export_browser_cookies_file()
     if cookie_file:
         opts['cookiefile'] = cookie_file
 
     cookies_from_browser = os.environ.get('YTDLP_COOKIES_FROM_BROWSER')
     if cookies_from_browser:
-        opts['cookiesfrombrowser'] = cookies_from_browser
+        parsed = parse_cookiesfrombrowser(cookies_from_browser)
+        if parsed:
+            opts['cookiesfrombrowser'] = parsed
 
     impersonate = os.environ.get('YTDLP_IMPERSONATE')
     if impersonate:
@@ -240,6 +462,14 @@ def try_download_with_fallback(url, ydl_opts, output_format, download_id=None):
         return
     except Exception as e:
         error_text = str(e)
+
+        if is_youtube_url(url) and is_auth_or_bot_error(error_text):
+            ok, last_error = try_download_with_browser_cookies(url, ydl_opts)
+            if ok:
+                return
+            if last_error:
+                error_text = str(last_error)
+
         if 'HTTP Error 403' not in error_text:
             raise
 
@@ -254,8 +484,18 @@ def try_download_with_fallback(url, ydl_opts, output_format, download_id=None):
             },
         }
 
-        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
-            ydl.download([url])
+        try:
+            with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                ydl.download([url])
+        except Exception as fallback_error:
+            fallback_error_text = str(fallback_error)
+            if is_youtube_url(url) and is_auth_or_bot_error(fallback_error_text):
+                ok, last_error = try_download_with_browser_cookies(url, fallback_opts)
+                if ok:
+                    return
+                if last_error:
+                    raise last_error
+            raise
 
 def build_format_string(output_format, quality):
     """Constrói a string de formato para yt-dlp baseado no formato e qualidade"""
@@ -287,6 +527,7 @@ def build_format_string(output_format, quality):
 
 def get_video_info(url, extract_playlist=False):
     """Extrai informações do vídeo/playlist incluindo capítulos"""
+    url = normalize_video_url(url, extract_playlist=extract_playlist)
     print(f"🔍 Buscando informações para: {url}")
     ydl_opts = {
         **build_ydl_base_opts(),
@@ -329,9 +570,44 @@ def get_video_info(url, extract_playlist=False):
                 'extractor': info.get('extractor', 'youtube')
             }
     except Exception as e:
+        error_text = str(e)
+
+        if is_youtube_url(url) and is_auth_or_bot_error(error_text):
+            info, retry_error = try_extract_with_browser_cookies(url, ydl_opts)
+            if info:
+                chapters = []
+                if info.get('chapters'):
+                    for idx, chapter in enumerate(info['chapters']):
+                        chapters.append({
+                            'id': idx,
+                            'title': chapter.get('title', f'Capítulo {idx + 1}'),
+                            'start_time': chapter.get('start_time', 0),
+                            'end_time': chapter.get('end_time', info.get('duration', 0))
+                        })
+
+                is_playlist = info.get('_type') == 'playlist'
+                playlist_count = len(info.get('entries', [])) if is_playlist else 0
+
+                return {
+                    'success': True,
+                    'title': info.get('title', 'Unknown'),
+                    'duration': info.get('duration', 0),
+                    'thumbnail': info.get('thumbnail', ''),
+                    'chapters': chapters,
+                    'has_chapters': len(chapters) > 0,
+                    'is_playlist': is_playlist,
+                    'playlist_count': playlist_count,
+                    'extractor': info.get('extractor', 'youtube')
+                }
+
+            return {
+                'success': False,
+                'error': build_auth_help_message(error_text)
+            }
+
         return {
             'success': False,
-            'error': strip_ansi(str(e))
+            'error': strip_ansi(error_text)
         }
 
 def format_time(seconds):
@@ -511,6 +787,7 @@ def video_info():
     if not url:
         return jsonify({'success': False, 'error': 'URL não fornecida'}), 400
     
+    url = normalize_video_url(url, extract_playlist=False)
     info = get_video_info(url)
     print(f"📤 Retornando resposta: {info.get('success', False)}")
     return jsonify(info)
@@ -527,6 +804,8 @@ def start_download():
     
     if not url or not video_info:
         return jsonify({'success': False, 'error': 'Dados incompletos'}), 400
+
+    url = normalize_video_url(url, extract_playlist=False)
     
     # Gerar ID único para este download
     download_id = str(uuid.uuid4())
@@ -605,6 +884,63 @@ def clear_history():
     download_history = []
     save_download_history()
     return jsonify({'success': True})
+
+@app.route('/api/cookies/status')
+def cookie_status():
+    """Retorna status do arquivo cookies.txt"""
+    cookie_path = get_cookie_file_path()
+    exists = cookie_path.exists()
+    size = cookie_path.stat().st_size if exists else 0
+
+    return jsonify({
+        'success': True,
+        'exists': exists,
+        'size': size,
+        'path': str(cookie_path) if exists else str(cookie_path),
+    })
+
+@app.route('/api/cookies/upload', methods=['POST'])
+def cookie_upload():
+    """Upload de cookies.txt para autenticação do YouTube"""
+    if 'cookie_file' not in request.files:
+        return jsonify({'success': False, 'error': 'Arquivo não enviado'}), 400
+
+    file = request.files['cookie_file']
+    if not file or not file.filename:
+        return jsonify({'success': False, 'error': 'Arquivo inválido'}), 400
+
+    filename = file.filename.lower()
+    if not filename.endswith('.txt'):
+        return jsonify({'success': False, 'error': 'Envie um arquivo .txt (formato Netscape)'}), 400
+
+    try:
+        content = file.read().decode('utf-8', errors='ignore')
+        if 'youtube.com' not in content and 'youtu.be' not in content:
+            return jsonify({'success': False, 'error': 'cookies.txt sem entradas do YouTube'}), 400
+
+        cookie_path = get_cookie_file_path()
+        with open(cookie_path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(content)
+
+        return jsonify({
+            'success': True,
+            'message': 'cookies.txt salvo com sucesso',
+            'path': str(cookie_path),
+            'size': cookie_path.stat().st_size,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Falha ao salvar cookies: {e}'}), 500
+
+@app.route('/api/cookies/clear', methods=['POST'])
+def cookie_clear():
+    """Remove cookies.txt local"""
+    try:
+        cookie_path = get_cookie_file_path()
+        if cookie_path.exists():
+            cookie_path.unlink()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Falha ao remover cookies: {e}'}), 500
 
 if __name__ == '__main__':
     print("🚀 Iniciando YouTube Chapter Downloader...")

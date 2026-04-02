@@ -47,6 +47,10 @@ const playlistCount = document.getElementById('playlist-count');
 const siteBadge = document.getElementById('site-badge');
 const historyBtn = document.getElementById('history-btn');
 const historyCountBadge = document.getElementById('history-count');
+const cookieUploadBtn = document.getElementById('cookie-upload-btn');
+const cookieClearBtn = document.getElementById('cookie-clear-btn');
+const cookieFileInput = document.getElementById('cookie-file-input');
+const cookieStatusText = document.getElementById('cookie-status-text');
 
 // Formatos de áudio e vídeo
 const audioFormats = ['mp3', 'm4a', 'wav', 'opus'];
@@ -78,6 +82,11 @@ function initializeEventListeners() {
     if (newDownloadBtn) newDownloadBtn.addEventListener('click', resetApp);
     if (formatSelect) formatSelect.addEventListener('change', updateQualityOptions);
     if (historyBtn) historyBtn.addEventListener('click', toggleHistory);
+    if (cookieUploadBtn && cookieFileInput) {
+        cookieUploadBtn.addEventListener('click', () => cookieFileInput.click());
+        cookieFileInput.addEventListener('change', handleCookieFileSelected);
+    }
+    if (cookieClearBtn) cookieClearBtn.addEventListener('click', clearLocalCookies);
 
     // Event listeners para modo single/multi
     if (singleModeBtn && multiModeBtn) {
@@ -111,6 +120,66 @@ function initializeEventListeners() {
     console.log('📹 Video Splitter Downloader carregado!');
     console.log('🌍 Suporta YouTube, Vimeo, Dailymotion e mais de 1000 sites!');
     loadHistoryCount();
+    loadCookieStatus();
+}
+
+async function loadCookieStatus() {
+    if (!cookieStatusText) return;
+
+    try {
+        const response = await fetch('/api/cookies/status');
+        const data = await response.json();
+
+        if (data.success && data.exists) {
+            const kb = (data.size / 1024).toFixed(1);
+            cookieStatusText.textContent = `✅ cookies.txt carregado (${kb} KB)`;
+        } else {
+            cookieStatusText.textContent = 'ℹ️ Sem cookies.txt local';
+        }
+    } catch {
+        cookieStatusText.textContent = '⚠️ Não foi possível verificar cookies';
+    }
+}
+
+async function handleCookieFileSelected(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('cookie_file', file);
+
+    try {
+        const response = await fetch('/api/cookies/upload', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Falha ao importar cookies');
+        }
+
+        showError('cookies.txt importado com sucesso. Tente buscar novamente.');
+        await loadCookieStatus();
+    } catch (error) {
+        showError(error.message || 'Erro ao importar cookies');
+    } finally {
+        if (cookieFileInput) cookieFileInput.value = '';
+    }
+}
+
+async function clearLocalCookies() {
+    try {
+        const response = await fetch('/api/cookies/clear', { method: 'POST' });
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || 'Falha ao limpar cookies');
+        }
+        showError('cookies.txt local removido.');
+        await loadCookieStatus();
+    } catch (error) {
+        showError(error.message || 'Erro ao limpar cookies');
+    }
 }
 
 // Inicializar quando o DOM estiver pronto
@@ -162,14 +231,92 @@ function hideLoader(button) {
     button.disabled = false;
 }
 
+function extractYouTubeVideoId(url) {
+    if (!url) return null;
+
+    try {
+        const parsed = new URL(url);
+        const host = (parsed.hostname || '').toLowerCase();
+
+        if (host.includes('youtu.be')) {
+            return parsed.pathname.replace('/', '').trim() || null;
+        }
+
+        if (host.includes('youtube.com') || host.includes('yout-ube.com')) {
+            const id = parsed.searchParams.get('v');
+            return id ? id.trim() : null;
+        }
+    } catch (e) {
+        // ignora
+    }
+
+    return null;
+}
+
+function isYouTubeAuthError(message) {
+    const text = (message || '').toLowerCase();
+    return text.includes('anti-bot') ||
+           text.includes('sign in to confirm') ||
+           text.includes('cookies-from-browser') ||
+           text.includes('how-do-i-pass-cookies-to-yt-dlp');
+}
+
+function appendNoCookieWatchActions() {
+    const sourceUrl = currentUrl || urlInput?.value?.trim();
+    const videoId = extractYouTubeVideoId(sourceUrl);
+    if (!videoId) return;
+
+    const actionWrap = document.createElement('div');
+    actionWrap.style.marginTop = '10px';
+    actionWrap.style.display = 'flex';
+    actionWrap.style.flexWrap = 'wrap';
+    actionWrap.style.gap = '10px';
+
+    const noCookieLink = document.createElement('a');
+    noCookieLink.href = `https://www.youtube-nocookie.com/embed/${videoId}`;
+    noCookieLink.target = '_blank';
+    noCookieLink.rel = 'noopener noreferrer';
+    noCookieLink.textContent = '▶️ Ver sem cookies (YouTube NoCookie)';
+    noCookieLink.style.color = '#ffd08a';
+    noCookieLink.style.textDecoration = 'underline';
+
+    const regularLink = document.createElement('a');
+    regularLink.href = `https://www.youtube.com/watch?v=${videoId}`;
+    regularLink.target = '_blank';
+    regularLink.rel = 'noopener noreferrer';
+    regularLink.textContent = '🔗 Abrir no YouTube';
+    regularLink.style.color = '#ffd08a';
+    regularLink.style.textDecoration = 'underline';
+
+    const exportHelpLink = document.createElement('a');
+    exportHelpLink.href = 'https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies';
+    exportHelpLink.target = '_blank';
+    exportHelpLink.rel = 'noopener noreferrer';
+    exportHelpLink.textContent = '🛠️ Como exportar cookies.txt';
+    exportHelpLink.style.color = '#ffd08a';
+    exportHelpLink.style.textDecoration = 'underline';
+
+    actionWrap.appendChild(noCookieLink);
+    actionWrap.appendChild(regularLink);
+    actionWrap.appendChild(exportHelpLink);
+    errorMessage.appendChild(actionWrap);
+}
+
 function showError(message) {
     errorMessage.textContent = `❌ ${message}`;
+
+    if (isYouTubeAuthError(message)) {
+        appendNoCookieWatchActions();
+    }
+
     errorMessage.classList.remove('hidden');
     errorMessage.style.display = 'block';
+
+    const timeoutMs = isYouTubeAuthError(message) ? 12000 : 5000;
     setTimeout(() => {
         errorMessage.style.display = 'none';
         errorMessage.classList.add('hidden');
-    }, 5000);
+    }, timeoutMs);
 }
 
 function formatDuration(seconds) {
