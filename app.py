@@ -16,6 +16,7 @@ from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 import sys
 
 APP_VERSION = '1.3.0'
+__author__  = 'Mikhael Gois'
 
 try:
     if hasattr(sys.stdout, 'reconfigure'):

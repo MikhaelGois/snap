@@ -1179,6 +1179,22 @@ video:not([src=""]), audio:not([src=""]) { display: block; }
     text-shadow: 0 0 8px rgba(0,245,255,0.4);
 }
 
+.footer-author {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.1em;
+    margin-top: 0.5rem !important;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+.author-name {
+    color: var(--neon-pink);
+    text-shadow: var(--glow-pink);
+    font-weight: 700;
+}
+
 /* ==================== LOADER ==================== */
 .loader {
     display: inline-block;
