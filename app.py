@@ -254,6 +254,34 @@ def get_browser_cookie_candidates():
 
     return unique
 
+def get_youtube_client_profiles():
+    """Perfis de clientes YouTube para tentativas progressivas."""
+    # Perfis em ordem de tentativa (do mais estável para o mais permissivo)
+    profiles = [
+        ['android', 'web'],
+        ['android', 'web', 'tv_embedded'],
+        ['ios', 'android', 'web'],
+        ['tv_embedded', 'android', 'web'],
+    ]
+
+    # Permite override via ambiente (ex.: "android,web,tv_embedded")
+    env_clients = os.environ.get('YTDLP_PLAYER_CLIENTS')
+    if env_clients:
+        parsed = [c.strip() for c in env_clients.split(',') if c.strip()]
+        if parsed:
+            profiles.insert(0, parsed)
+
+    # Remove perfis duplicados preservando ordem
+    unique_profiles = []
+    seen = set()
+    for profile in profiles:
+        key = tuple(profile)
+        if key not in seen:
+            seen.add(key)
+            unique_profiles.append(profile)
+
+    return unique_profiles
+
 def is_auth_or_bot_error(error_text: str) -> bool:
     """Detecta erros comuns de bloqueio/autenticação do YouTube"""
     text = (error_text or '').lower()
@@ -262,8 +290,20 @@ def is_auth_or_bot_error(error_text: str) -> bool:
         'use --cookies-from-browser',
         'use --cookies',
         'how-do-i-pass-cookies-to-yt-dlp',
-        'this video is unavailable',
         'http error 429',
+    ]
+    return any(p in text for p in patterns)
+
+def is_video_unavailable_error(error_text: str) -> bool:
+    """Detecta vídeos indisponíveis (privado/removido/restrito)."""
+    text = (error_text or '').lower()
+    patterns = [
+        'video unavailable',
+        'this video is unavailable',
+        'private video',
+        'this video is private',
+        'members-only content',
+        'not available in your country',
     ]
     return any(p in text for p in patterns)
 
@@ -408,8 +448,11 @@ def export_browser_cookies_file(force: bool = False):
 
     return None
 
-def build_ydl_base_opts():
+def build_ydl_base_opts(player_clients=None):
     """Opções base do yt-dlp (headers, cookies, etc.)"""
+    if not player_clients:
+        player_clients = ['android', 'web']
+
     opts = {
         'socket_timeout': 30,
         'geo_bypass': True,
@@ -418,7 +461,7 @@ def build_ydl_base_opts():
         'concurrent_fragment_downloads': 1,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'web']
+                'player_client': player_clients
             }
         },
         'http_headers': {
@@ -446,6 +489,34 @@ def build_ydl_base_opts():
     impersonate = os.environ.get('YTDLP_IMPERSONATE')
     if impersonate:
         opts['impersonate'] = impersonate
+
+    env_js_runtimes = os.environ.get('YTDLP_JS_RUNTIMES')
+    if env_js_runtimes:
+        js_runtime_opts = {}
+        for raw_runtime in [runtime.strip() for runtime in env_js_runtimes.split(',') if runtime.strip()]:
+            if ':' in raw_runtime:
+                runtime_name, runtime_path = raw_runtime.split(':', 1)
+                runtime_name = runtime_name.strip()
+                runtime_path = runtime_path.strip()
+                if runtime_name:
+                    js_runtime_opts[runtime_name] = {'path': runtime_path} if runtime_path else {}
+            else:
+                js_runtime_opts[raw_runtime] = {}
+
+        if js_runtime_opts:
+            opts['js_runtimes'] = js_runtime_opts
+    else:
+        js_runtime_opts = {}
+        node_path = shutil.which('node')
+        deno_path = shutil.which('deno')
+
+        if node_path:
+            js_runtime_opts['node'] = {'path': node_path}
+        if deno_path:
+            js_runtime_opts['deno'] = {'path': deno_path}
+
+        if js_runtime_opts:
+            opts['js_runtimes'] = js_runtime_opts
 
     return opts
 
@@ -575,6 +646,15 @@ def get_video_info(url, extract_playlist=False):
     except Exception as e:
         error_text = str(e)
 
+        if is_youtube_url(url) and is_video_unavailable_error(error_text):
+            return {
+                'success': False,
+                'error': (
+                    'Este vídeo está indisponível no momento (privado, removido, restrito por região '
+                    'ou exige login). Tente outro link ou importe um cookies.txt de uma sessão logada.'
+                )
+            }
+
         if is_youtube_url(url) and is_auth_or_bot_error(error_text):
             info, retry_error = try_extract_with_browser_cookies(url, ydl_opts)
             if info:
@@ -602,6 +682,52 @@ def get_video_info(url, extract_playlist=False):
                     'playlist_count': playlist_count,
                     'extractor': info.get('extractor', 'youtube')
                 }
+
+            # Tentar perfis alternativos de cliente com cookies exportados à força
+            forced_cookie_file = export_browser_cookies_file(force=True)
+            for client_profile in get_youtube_client_profiles():
+                retry_opts = {
+                    **ydl_opts,
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': client_profile
+                        }
+                    },
+                }
+
+                if forced_cookie_file:
+                    retry_opts['cookiefile'] = forced_cookie_file
+
+                try:
+                    with yt_dlp.YoutubeDL(retry_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+
+                    chapters = []
+                    if info.get('chapters'):
+                        for idx, chapter in enumerate(info['chapters']):
+                            chapters.append({
+                                'id': idx,
+                                'title': chapter.get('title', f'Capítulo {idx + 1}'),
+                                'start_time': chapter.get('start_time', 0),
+                                'end_time': chapter.get('end_time', info.get('duration', 0))
+                            })
+
+                    is_playlist = info.get('_type') == 'playlist'
+                    playlist_count = len(info.get('entries', [])) if is_playlist else 0
+
+                    return {
+                        'success': True,
+                        'title': info.get('title', 'Unknown'),
+                        'duration': info.get('duration', 0),
+                        'thumbnail': info.get('thumbnail', ''),
+                        'chapters': chapters,
+                        'has_chapters': len(chapters) > 0,
+                        'is_playlist': is_playlist,
+                        'playlist_count': playlist_count,
+                        'extractor': info.get('extractor', 'youtube')
+                    }
+                except Exception as profile_error:
+                    error_text = str(profile_error)
 
             return {
                 'success': False,
@@ -852,22 +978,46 @@ def get_download_status(download_id):
 
 @app.route('/api/download-file/<path:filename>')
 def download_file(filename):
-    """Serve arquivo para download"""
+    """Serve arquivo para download (opcionalmente remove após envio com ?move=1)"""
     try:
+        def _delete_file_with_retries(target_path: Path, retries: int = 20, delay: float = 0.5):
+            """Remove arquivo com tentativas (Windows pode manter arquivo em uso por alguns instantes)."""
+            for _ in range(retries):
+                try:
+                    if not target_path.exists():
+                        return
+                    target_path.unlink()
+                    print(f"🗑️ Arquivo movido para o navegador e removido localmente: {target_path}")
+                    return
+                except Exception:
+                    time.sleep(delay)
+
+            print(f"⚠️ Falha ao remover arquivo após download (arquivo em uso): {target_path}")
+
         file_path = DOWNLOAD_FOLDER / filename
+        should_move = str(request.args.get('move', '')).lower() in {'1', 'true', 'yes'}
         
         if not file_path.exists():
             return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
-        
-        return send_file(
+
+        response = send_file(
             file_path,
             as_attachment=True,
             download_name=filename
         )
-        
-        thread = threading.Thread(target=delete_file_delayed, daemon=True)
-        thread.start()
-        
+
+        if should_move:
+            def _delete_file_after_response():
+                # Executa em background para não bloquear fechamento da resposta
+                thread = threading.Thread(
+                    target=_delete_file_with_retries,
+                    args=(file_path,),
+                    daemon=True
+                )
+                thread.start()
+
+            response.call_on_close(_delete_file_after_response)
+
         return response
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

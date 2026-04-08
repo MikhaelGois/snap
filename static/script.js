@@ -622,7 +622,7 @@ function showDownloadComplete(files) {
         wrapper.style.alignItems = 'center';
         
         const link = document.createElement('a');
-        link.href = `/api/download-file/${encodeURIComponent(fileName)}`;
+        link.href = `/api/download-file/${encodeURIComponent(fileName)}?move=1`;
         link.className = 'download-link';
         link.style.flex = '1';
         link.innerHTML = `
@@ -826,7 +826,7 @@ async function loadAllDownloadedFiles() {
                         wrapper.className = 'download-link-wrapper';
                         
                         const link = document.createElement('a');
-                        link.href = `/api/download-file/${encodeURIComponent(fileName)}`;
+                        link.href = `/api/download-file/${encodeURIComponent(fileName)}?move=1`;
                         link.className = 'download-link';
                         link.innerHTML = `
                             <span class="download-link-name">📥 ${fileName}</span>
@@ -885,7 +885,7 @@ async function loadHistory() {
         historyList.innerHTML = data.history.reverse().map(item => {
             const filesHtml = item.files.map(file => {
                 const filename = file.split('\\').pop().split('/').pop();
-                return `<a href="/api/download-file/${encodeURIComponent(filename)}" class="file-link" download="${filename}">📥 ${filename}</a>`;
+                return `<a href="/api/download-file/${encodeURIComponent(filename)}?move=1" class="file-link" download="${filename}">📥 ${filename}</a>`;
             }).join('');
             
             return `

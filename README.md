@@ -2,6 +2,17 @@
 
 Um downloader web moderno e inteligente para vídeos com suporte a capítulos, múltiplos formatos e interface elegante.
 
+## 🆕 Atualizações Recentes
+
+- Melhor tratamento de bloqueios do YouTube (anti-bot/autenticação).
+- Fluxo de cookies reforçado:
+  - tentativa automática de leitura do navegador;
+  - fallback com importação manual de `cookies.txt` pela interface.
+- Mensagens de erro mais claras para diferenciar:
+  - vídeo indisponível/privado/restrito;
+  - falha de autenticação anti-bot.
+- Compatibilidade com `yt-dlp` atualizada para usar `js_runtimes` no formato correto.
+
 ## 🚀 Instalação Rápida (Funciona em Qualquer Máquina)
 
 ### 1. Instalar Python 3.8+
@@ -69,7 +80,6 @@ brew install ffmpeg
 #### Linux
 ```bash
 sudo apt install ffmpeg
-```
 ffmpeg -version
 ```
 
