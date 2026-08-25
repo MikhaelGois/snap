@@ -44,6 +44,7 @@
                     <div class="mode-toggle">
                         <button id="single-mode-btn" class="mode-btn active">1 Link</button>
                         <button id="multi-mode-btn" class="mode-btn">Múltiplos</button>
+                        <button id="playlist-mode-btn" class="mode-btn">🎵 Playlist</button>
                     </div>
                 </div>
                 
@@ -91,6 +92,27 @@
                         <span class="loader hidden"></span>
                     </button>
                     <p class="hint">📝 Uma URL por linha • Todos serão baixados automaticamente</p>
+                </div>
+
+                <!-- MODO PLAYLIST -->
+                <div class="input-wrapper hidden" id="playlist-input-mode">
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            id="playlist-url"
+                            placeholder="https://www.youtube.com/playlist?list=..."
+                            autocomplete="off"
+                            spellcheck="false"
+                        >
+                        <button id="fetch-playlist-btn" class="btn btn-primary">
+                            <span class="btn-content">
+                                <span class="btn-icon">🎵</span>
+                                <span class="btn-text">Carregar</span>
+                            </span>
+                            <span class="loader hidden"></span>
+                        </button>
+                    </div>
+                    <p class="hint">🎵 Cole a URL de uma playlist do YouTube para ver e selecionar vídeos</p>
                 </div>
             </section>
 
@@ -218,6 +240,74 @@
                         <button id="download-btn" class="btn btn-success btn-large">
                             <span>⬇️</span>
                             <span>Baixar Agora</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SEÇÃO 2.5: PLAYLIST -->
+            <section id="playlist-section" class="section playlist-section hidden">
+                <div class="playlist-card">
+                    <div class="playlist-header">
+                        <div class="playlist-title-row">
+                            <span class="playlist-icon">🎵</span>
+                            <div>
+                                <h2 id="playlist-title">Playlist</h2>
+                                <p id="playlist-subtitle" class="tagline"></p>
+                            </div>
+                        </div>
+                        <button id="playlist-new-search-btn" class="btn btn-secondary btn-sm" onclick="resetApp()">
+                            <span>🔍</span><span>Nova Busca</span>
+                        </button>
+                    </div>
+
+                    <div class="chapters-toolbar">
+                        <button id="playlist-select-all-btn" class="btn btn-sm btn-secondary">✓ Todos</button>
+                        <button id="playlist-deselect-all-btn" class="btn btn-sm btn-secondary">✕ Nenhum</button>
+                        <span id="playlist-selection-info" class="hint" style="margin:0;"></span>
+                    </div>
+
+                    <div id="playlist-entries-list" class="playlist-entries-list"></div>
+
+                    <div class="download-options" style="margin-top:1.5rem;">
+                        <h3>⚙️ Opções de Download</h3>
+                        <div class="options-grid">
+                            <div class="option-group">
+                                <label for="playlist-format-select">📁 Formato:</label>
+                                <select id="playlist-format-select" class="select-input">
+                                    <optgroup label="🎥 Vídeo">
+                                        <option value="mp4" selected>MP4 (Recomendado)</option>
+                                        <option value="mkv">MKV (Alta qualidade)</option>
+                                        <option value="webm">WebM</option>
+                                        <option value="avi">AVI</option>
+                                    </optgroup>
+                                    <optgroup label="🎵 Áudio">
+                                        <option value="mp3">MP3</option>
+                                        <option value="m4a">M4A (AAC)</option>
+                                        <option value="wav">WAV (Lossless)</option>
+                                        <option value="opus">Opus</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="option-group">
+                                <label for="playlist-quality-select">🎬 Qualidade:</label>
+                                <select id="playlist-quality-select" class="select-input">
+                                    <option value="best">Melhor Disponível</option>
+                                    <option value="2160">2160p (4K)</option>
+                                    <option value="1440">1440p (QHD)</option>
+                                    <option value="1080">1080p (Full HD)</option>
+                                    <option value="720">720p (HD)</option>
+                                    <option value="480">480p</option>
+                                    <option value="360">360p</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="action-buttons" style="margin-top:1rem;">
+                        <button id="playlist-download-btn" class="btn btn-success btn-large">
+                            <span>⬇️</span>
+                            <span>Baixar Selecionados</span>
                         </button>
                     </div>
                 </div>

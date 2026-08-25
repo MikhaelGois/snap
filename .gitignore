@@ -26,3 +26,14 @@ env/
 
 # FFmpeg portátil (será baixado automaticamente)
 ffmpeg_portable/
+
+# Android
+.gradle/
+**/build/
+android/.gradle/
+android/app/build/
+local.properties
+.cxx/
+*.apk
+*.aab
+*.hprof

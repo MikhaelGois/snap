@@ -599,6 +599,157 @@ def build_format_string(output_format, quality):
         else:
             return f'bestvideo[height<={height}]+bestaudio/best[height<={height}]'
 
+def get_playlist_info(url):
+    """Extrai informações de uma playlist (título, thumbnail e metadados básicos de cada entrada)"""
+    print(f"🎵 Buscando informações da playlist: {url}")
+    ydl_opts = {
+        **build_ydl_base_opts(),
+        'quiet': False,
+        'no_warnings': False,
+        'extract_flat': True,   # retorna entradas sem baixar cada vídeo
+        'skip_download': True,
+        'noplaylist': False,
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            print("⏳ Extraindo informações da playlist...")
+            info = ydl.extract_info(url, download=False)
+            print("✅ Informações da playlist extraídas!")
+
+        if info.get('_type') != 'playlist':
+            return {'success': False, 'error': 'A URL não parece ser uma playlist válida'}
+
+        entries = []
+        for idx, entry in enumerate(info.get('entries', [])):
+            if entry is None:
+                continue
+            entries.append({
+                'index': idx,
+                'id': entry.get('id', ''),
+                'title': entry.get('title', f'Vídeo {idx + 1}'),
+                'duration': entry.get('duration', 0),
+                'thumbnail': entry.get('thumbnail', ''),
+                'url': entry.get('url') or entry.get('webpage_url', ''),
+            })
+
+        return {
+            'success': True,
+            'playlist_title': info.get('title', 'Playlist'),
+            'playlist_count': len(entries),
+            'entries': entries,
+        }
+    except Exception as e:
+        error_text = strip_ansi(str(e))
+        if is_youtube_url(url) and is_auth_or_bot_error(error_text):
+            return {'success': False, 'error': build_auth_help_message(error_text)}
+        return {'success': False, 'error': error_text}
+
+
+def download_playlist(url, indices, download_id, output_format='mp4', quality='best'):
+    """Baixa vídeos selecionados de uma playlist, um a um, reportando progresso."""
+    try:
+        download_status[download_id]['status'] = 'fetching'
+        download_status[download_id]['progress'] = 0
+        download_status[download_id]['current_item'] = 0
+        download_status[download_id]['total_items'] = len(indices) if indices else 0
+        download_status[download_id]['current_title'] = ''
+        download_status[download_id]['files'] = []
+
+        # 1. Extrair lista de entradas da playlist
+        playlist_data = get_playlist_info(url)
+        if not playlist_data['success']:
+            raise Exception(playlist_data['error'])
+
+        all_entries = playlist_data['entries']
+
+        # Se nenhum índice foi selecionado, baixar todos
+        if not indices:
+            selected_entries = all_entries
+        else:
+            selected_entries = [e for e in all_entries if e['index'] in indices]
+
+        download_status[download_id]['total_items'] = len(selected_entries)
+        format_string = build_format_string(output_format, quality)
+
+        accumulated_files = []
+
+        for seq_num, entry in enumerate(selected_entries, start=1):
+            video_url = entry.get('url') or entry.get('webpage_url', url)
+            video_title = sanitize_filename(entry.get('title', f'video_{seq_num}'))
+
+            download_status[download_id]['current_item'] = seq_num
+            download_status[download_id]['current_title'] = entry.get('title', '')
+            # progresso geral baseado em quantos foram concluídos
+            download_status[download_id]['progress'] = int(((seq_num - 1) / len(selected_entries)) * 100)
+            download_status[download_id]['status'] = 'downloading'
+
+            output_path = DOWNLOAD_FOLDER / f"{video_title}.{output_format}"
+
+            def make_progress_hook(dl_id):
+                def _hook(d):
+                    if d['status'] == 'downloading':
+                        item_done = download_status[dl_id]['current_item'] - 1
+                        total = download_status[dl_id]['total_items']
+                        if d.get('total_bytes'):
+                            item_frac = d.get('downloaded_bytes', 0) / d['total_bytes']
+                        elif d.get('total_bytes_estimate'):
+                            item_frac = d.get('downloaded_bytes', 0) / d['total_bytes_estimate']
+                        else:
+                            item_frac = 0
+                        overall = ((item_done + item_frac) / total) * 100
+                        download_status[dl_id]['progress'] = int(overall)
+                return _hook
+
+            ydl_opts = {
+                **build_ydl_base_opts(),
+                'format': format_string,
+                'outtmpl': str(output_path),
+                'progress_hooks': [make_progress_hook(download_id)],
+                'merge_output_format': output_format if output_format in ['mp4', 'mkv', 'webm'] else 'mp4',
+                'noplaylist': True,
+            }
+
+            if FFMPEG_LOCATION:
+                ydl_opts['ffmpeg_location'] = FFMPEG_LOCATION
+
+            if output_format in ['mp3', 'm4a', 'wav', 'opus']:
+                ydl_opts['postprocessors'] = [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': output_format,
+                    'preferredquality': '192' if output_format == 'mp3' else '0',
+                }]
+
+            try:
+                try_download_with_fallback(video_url, ydl_opts, output_format, download_id)
+                accumulated_files.append(str(output_path))
+            except Exception as item_err:
+                print(f"⚠️ Erro ao baixar '{video_title}': {item_err}")
+                # Continua para o próximo vídeo
+
+            download_status[download_id]['files'] = accumulated_files
+
+        download_status[download_id]['status'] = 'completed'
+        download_status[download_id]['progress'] = 100
+        download_status[download_id]['files'] = accumulated_files
+
+        # Adicionar ao histórico
+        download_history.append({
+            'id': download_id,
+            'title': playlist_data.get('playlist_title', 'Playlist'),
+            'format': output_format,
+            'quality': quality,
+            'files': accumulated_files,
+            'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'url': url
+        })
+        save_download_history()
+
+    except Exception as e:
+        download_status[download_id]['status'] = 'error'
+        download_status[download_id]['error'] = strip_ansi(str(e))
+
+
 def get_video_info(url, extract_playlist=False):
     """Extrai informações do vídeo/playlist incluindo capítulos"""
     url = normalize_video_url(url, extract_playlist=extract_playlist)
@@ -915,7 +1066,37 @@ def video_info():
     
     if not url:
         return jsonify({'success': False, 'error': 'URL não fornecida'}), 400
-    
+
+    # Detecta URLs de playlist pura (ex: youtube.com/playlist?list=...)
+    # Nesse caso, NÃO normalizar (para não remover o parâmetro 'list')
+    try:
+        _parsed = urlparse(url)
+        _qs = dict(parse_qsl(_parsed.query))
+        _is_pure_playlist = (
+            is_youtube_url(url)
+            and _parsed.path.rstrip('/') == '/playlist'
+            and 'list' in _qs
+            and 'v' not in _qs
+        )
+    except Exception:
+        _is_pure_playlist = False
+
+    if _is_pure_playlist:
+        # Redireciona para o handler de playlist
+        print("🎵 URL de playlist pura detectada — buscando via get_playlist_info")
+        info = get_playlist_info(url)
+        # Adapta a resposta para o formato esperado pelo frontend
+        if info.get('success'):
+            info['is_playlist'] = True
+            info['title'] = info.get('playlist_title', 'Playlist')
+            info['duration'] = 0
+            info['thumbnail'] = ''
+            info['chapters'] = []
+            info['has_chapters'] = False
+            info['extractor'] = 'youtube:playlist'
+        print(f"📤 Retornando resposta: {info.get('success', False)}")
+        return jsonify(info)
+
     url = normalize_video_url(url, extract_playlist=False)
     info = get_video_info(url)
     print(f"📤 Retornando resposta: {info.get('success', False)}")
@@ -960,6 +1141,51 @@ def start_download():
         'download_id': download_id
     })
 
+@app.route('/api/playlist-info', methods=['POST'])
+def playlist_info():
+    """Endpoint para obter informações de uma playlist"""
+    print("📨 Recebendo requisição /api/playlist-info")
+    data = request.json
+    url = data.get('url')
+
+    if not url:
+        return jsonify({'success': False, 'error': 'URL não fornecida'}), 400
+
+    result = get_playlist_info(url)
+    return jsonify(result)
+
+
+@app.route('/api/playlist-download', methods=['POST'])
+def start_playlist_download():
+    """Inicia o download de vídeos selecionados de uma playlist"""
+    data = request.json
+    url = data.get('url')
+    indices = data.get('indices', [])  # lista de índices; vazio = todos
+    output_format = data.get('format', 'mp4')
+    quality = data.get('quality', 'best')
+
+    if not url:
+        return jsonify({'success': False, 'error': 'URL não fornecida'}), 400
+
+    download_id = str(uuid.uuid4())
+    download_status[download_id] = {
+        'status': 'pending',
+        'progress': 0,
+        'current_item': 0,
+        'total_items': 0,
+        'current_title': '',
+        'files': [],
+    }
+
+    thread = threading.Thread(
+        target=download_playlist,
+        args=(url, indices, download_id, output_format, quality)
+    )
+    thread.start()
+
+    return jsonify({'success': True, 'download_id': download_id})
+
+
 @app.route('/api/download-status/<download_id>')
 def get_download_status(download_id):
     """Retorna o status de um download"""
@@ -973,7 +1199,10 @@ def get_download_status(download_id):
         'status': status['status'],
         'progress': status['progress'],
         'error': status.get('error'),
-        'files': status.get('files', [])
+        'files': status.get('files', []),
+        'current_item': status.get('current_item', 0),
+        'total_items': status.get('total_items', 0),
+        'current_title': status.get('current_title', ''),
     })
 
 @app.route('/api/download-file/<path:filename>')

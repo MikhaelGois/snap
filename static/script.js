@@ -51,6 +51,20 @@ const cookieUploadBtn = document.getElementById('cookie-upload-btn');
 const cookieClearBtn = document.getElementById('cookie-clear-btn');
 const cookieFileInput = document.getElementById('cookie-file-input');
 const cookieStatusText = document.getElementById('cookie-status-text');
+const playlistSection = document.getElementById('playlist-section');
+const playlistTitleEl = document.getElementById('playlist-title');
+const playlistSubtitleEl = document.getElementById('playlist-subtitle');
+const playlistEntriesList = document.getElementById('playlist-entries-list');
+const playlistSelectionInfo = document.getElementById('playlist-selection-info');
+const playlistSelectAllBtn = document.getElementById('playlist-select-all-btn');
+const playlistDeselectAllBtn = document.getElementById('playlist-deselect-all-btn');
+const playlistDownloadBtn = document.getElementById('playlist-download-btn');
+const playlistFormatSelect = document.getElementById('playlist-format-select');
+const playlistQualitySelect = document.getElementById('playlist-quality-select');
+const playlistInputMode = document.getElementById('playlist-input-mode');
+const playlistUrlInput = document.getElementById('playlist-url');
+const fetchPlaylistBtn = document.getElementById('fetch-playlist-btn');
+const playlistModeBtn = document.getElementById('playlist-mode-btn');
 
 // Formatos de áudio e vídeo
 const audioFormats = ['mp3', 'm4a', 'wav', 'opus'];
@@ -88,16 +102,16 @@ function initializeEventListeners() {
     }
     if (cookieClearBtn) cookieClearBtn.addEventListener('click', clearLocalCookies);
 
-    // Event listeners para modo single/multi
+    // Event listeners para playlist
+    if (playlistSelectAllBtn) playlistSelectAllBtn.addEventListener('click', () => toggleAllPlaylistItems(true));
+    if (playlistDeselectAllBtn) playlistDeselectAllBtn.addEventListener('click', () => toggleAllPlaylistItems(false));
+    if (playlistDownloadBtn) playlistDownloadBtn.addEventListener('click', startPlaylistDownload);
+
+    // Event listeners para modo single/multi/playlist
     if (singleModeBtn && multiModeBtn) {
-        singleModeBtn.addEventListener('click', () => {
-            console.log('Clicou em Single Mode');
-            switchMode('single');
-        });
-        multiModeBtn.addEventListener('click', () => {
-            console.log('Clicou em Multi Mode');
-            switchMode('multi');
-        });
+        singleModeBtn.addEventListener('click', () => { switchMode('single'); });
+        multiModeBtn.addEventListener('click', () => { switchMode('multi'); });
+        if (playlistModeBtn) playlistModeBtn.addEventListener('click', () => { switchMode('playlist'); });
         console.log('✅ Event listeners de modo configurados');
     } else {
         console.error('❌ Botões de modo não encontrados:', { singleModeBtn, multiModeBtn });
@@ -108,6 +122,15 @@ function initializeEventListeners() {
         console.log('✅ Event listener fetch-multi configurado');
     } else {
         console.error('❌ Botão Fetch Multi não encontrado');
+    }
+
+    if (fetchPlaylistBtn) {
+        fetchPlaylistBtn.addEventListener('click', fetchPlaylistFromInput);
+    }
+    if (playlistUrlInput) {
+        playlistUrlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') fetchPlaylistFromInput();
+        });
     }
 
     // Event listener para mudar tipo de download
@@ -380,7 +403,13 @@ async function fetchVideoInfo() {
 
         currentVideoInfo = data;
         currentUrl = url;
-        displayVideoInfo(data);
+
+        if (data.is_playlist) {
+            // é uma playlist — carregar detalhes completos
+            await fetchPlaylistInfo(url);
+        } else {
+            displayVideoInfo(data);
+        }
 
     } catch (error) {
         console.error('Erro capturado:', error);
@@ -390,7 +419,220 @@ async function fetchVideoInfo() {
     }
 }
 
+// ==================== PLAYLIST ====================
+
+async function fetchPlaylistFromInput() {
+    const url = playlistUrlInput ? playlistUrlInput.value.trim() : '';
+
+    if (!url) {
+        showError('Por favor, insira a URL da playlist');
+        return;
+    }
+
+    if (fetchPlaylistBtn) showLoader(fetchPlaylistBtn);
+    errorMessage.style.display = 'none';
+    errorMessage.classList.add('hidden');
+
+    try {
+        await fetchPlaylistInfo(url);
+    } catch (error) {
+        showError(error.message || 'Erro ao carregar playlist');
+    } finally {
+        if (fetchPlaylistBtn) hideLoader(fetchPlaylistBtn);
+    }
+}
+
+async function fetchPlaylistInfo(url) {
+    try {
+        const response = await fetch('/api/playlist-info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Erro ao carregar playlist');
+        }
+
+        displayPlaylistInfo(data, url);
+    } catch (error) {
+        showError(error.message);
+    }
+}
+
+function displayPlaylistInfo(info, url) {
+    currentUrl = url;
+
+    // Esconde seção de vídeo se estiver aberta
+    if (videoSection) {
+        videoSection.classList.add('hidden');
+        videoSection.style.display = 'none';
+    }
+
+    playlistTitleEl.textContent = info.playlist_title || 'Playlist';
+    playlistSubtitleEl.textContent = `${info.playlist_count} vídeo${info.playlist_count !== 1 ? 's' : ''}`;
+
+    playlistEntriesList.innerHTML = '';
+
+    info.entries.forEach((entry, idx) => {
+        const item = document.createElement('div');
+        item.className = 'playlist-entry-item';
+        item.dataset.index = entry.index;
+
+        const thumb = entry.thumbnail
+            ? `<img src="${entry.thumbnail}" alt="thumbnail" class="playlist-entry-thumb" loading="lazy" onerror="this.style.display='none'">`
+            : `<div class="playlist-entry-thumb playlist-entry-thumb-placeholder">🎬</div>`;
+
+        const dur = entry.duration ? formatDuration(entry.duration) : '--';
+
+        item.innerHTML = `
+            <input type="checkbox" class="playlist-entry-checkbox" data-index="${entry.index}" checked>
+            <div class="playlist-entry-num">${idx + 1}</div>
+            ${thumb}
+            <div class="playlist-entry-meta">
+                <div class="playlist-entry-title">${entry.title}</div>
+                <div class="playlist-entry-duration">${dur}</div>
+            </div>
+        `;
+
+        item.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'INPUT') {
+                const cb = item.querySelector('.playlist-entry-checkbox');
+                cb.checked = !cb.checked;
+                item.classList.toggle('selected', cb.checked);
+                updatePlaylistSelectionInfo();
+            }
+        });
+
+        const cb = item.querySelector('.playlist-entry-checkbox');
+        cb.addEventListener('change', () => {
+            item.classList.toggle('selected', cb.checked);
+            updatePlaylistSelectionInfo();
+        });
+
+        item.classList.add('selected');
+        playlistEntriesList.appendChild(item);
+    });
+
+    updatePlaylistSelectionInfo();
+
+    playlistSection.classList.remove('hidden');
+    playlistSection.style.display = 'block';
+    playlistSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleAllPlaylistItems(select) {
+    document.querySelectorAll('.playlist-entry-checkbox').forEach(cb => {
+        cb.checked = select;
+        cb.closest('.playlist-entry-item').classList.toggle('selected', select);
+    });
+    updatePlaylistSelectionInfo();
+}
+
+function updatePlaylistSelectionInfo() {
+    const all = document.querySelectorAll('.playlist-entry-checkbox');
+    const checked = Array.from(all).filter(cb => cb.checked).length;
+    if (playlistSelectionInfo) {
+        playlistSelectionInfo.textContent = `${checked} de ${all.length} selecionado${checked !== 1 ? 's' : ''}`;
+    }
+    if (playlistDownloadBtn) {
+        playlistDownloadBtn.disabled = checked === 0;
+    }
+}
+
+function getSelectedPlaylistIndices() {
+    return Array.from(document.querySelectorAll('.playlist-entry-checkbox:checked'))
+        .map(cb => parseInt(cb.dataset.index));
+}
+
+async function startPlaylistDownload() {
+    const indices = getSelectedPlaylistIndices();
+    if (indices.length === 0) {
+        showError('Selecione pelo menos um vídeo da playlist');
+        return;
+    }
+
+    const format = playlistFormatSelect ? playlistFormatSelect.value : 'mp4';
+    const quality = playlistQualitySelect ? playlistQualitySelect.value : 'best';
+
+    playlistSection.classList.add('hidden');
+    playlistSection.style.display = 'none';
+    progressSection.classList.remove('hidden');
+    progressSection.style.display = 'block';
+    progressStatus.textContent = 'Iniciando download da playlist...';
+    progressBar.style.width = '0%';
+    progressText.textContent = '0%';
+
+    try {
+        const response = await fetch('/api/playlist-download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: currentUrl,
+                indices,
+                format,
+                quality,
+            })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Erro ao iniciar download da playlist');
+        }
+
+        downloadId = data.download_id;
+        monitorPlaylistProgress(downloadId, indices.length);
+    } catch (error) {
+        showError(error.message);
+        progressSection.classList.add('hidden');
+        progressSection.style.display = 'none';
+        playlistSection.classList.remove('hidden');
+        playlistSection.style.display = 'block';
+    }
+}
+
+async function monitorPlaylistProgress(dlId, totalSelected) {
+    progressInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/download-status/${dlId}`);
+            const data = await response.json();
+
+            if (!data.success) throw new Error(data.error || 'Erro ao verificar status');
+
+            const { status, progress, current_item, total_items, current_title } = data;
+
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = `${progress}%`;
+
+            if (status === 'fetching') {
+                progressStatus.textContent = 'Carregando informações da playlist...';
+            } else if (status === 'downloading') {
+                const label = current_title ? ` — "${current_title}"` : '';
+                progressStatus.textContent = `Baixando ${current_item} de ${total_items}${label}`;
+            } else if (status === 'completed') {
+                clearInterval(progressInterval);
+                showDownloadComplete(data.files);
+            } else if (status === 'error') {
+                clearInterval(progressInterval);
+                throw new Error(data.error || 'Erro durante o download da playlist');
+            }
+        } catch (error) {
+            clearInterval(progressInterval);
+            showError(error.message);
+            progressSection.classList.add('hidden');
+            progressSection.style.display = 'none';
+        }
+    }, 1000);
+}
+
 function displayVideoInfo(info) {
+    // Esconde seção de playlist se estiver aberta
+    if (playlistSection) {
+        playlistSection.classList.add('hidden');
+        playlistSection.style.display = 'none';
+    }
+
     // Mostrar informações do vídeo
     videoThumbnail.src = info.thumbnail;
     videoTitle.textContent = info.title;
@@ -652,8 +894,9 @@ function showDownloadComplete(files) {
 }
 
 function resetApp() {
-    urlInput.value = '';
-    multiUrlsInput.value = '';
+    if (urlInput) urlInput.value = '';
+    if (multiUrlsInput) multiUrlsInput.value = '';
+    if (playlistUrlInput) playlistUrlInput.value = '';
     currentVideoInfo = null;
     currentUrl = null;
     downloadId = null;
@@ -666,10 +909,12 @@ function resetApp() {
     progressSection.classList.add('hidden');
     completeSection.classList.add('hidden');
     playerSection.classList.add('hidden');
+    if (playlistSection) playlistSection.classList.add('hidden');
     videoSection.style.display = 'none';
     progressSection.style.display = 'none';
     completeSection.style.display = 'none';
     playerSection.style.display = 'none';
+    if (playlistSection) playlistSection.style.display = 'none';
     errorMessage.style.display = 'none';
     errorMessage.classList.add('hidden');
 
@@ -677,26 +922,41 @@ function resetApp() {
     progressText.textContent = '0%';
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(() => urlInput && urlInput.focus(), 400);
+    // Retorna o foco ao input do modo ativo
+    setTimeout(() => {
+        if (singleModeBtn && singleModeBtn.classList.contains('active') && urlInput) {
+            urlInput.focus();
+        } else if (playlistModeBtn && playlistModeBtn.classList.contains('active') && playlistUrlInput) {
+            playlistUrlInput.focus();
+        }
+    }, 400);
 }
 
-// Funções de modo Single/Multi
+// Funções de modo Single/Multi/Playlist
 function switchMode(mode) {
     console.log(`🔄 Mudando para modo: ${mode}`);
-    console.log('Elementos:', { singleInputMode, multiInputMode });
-    
+
+    // Esconde todos os painéis de input
+    if (singleInputMode) singleInputMode.classList.add('hidden');
+    if (multiInputMode)  multiInputMode.classList.add('hidden');
+    if (playlistInputMode) playlistInputMode.classList.add('hidden');
+
+    // Remove 'active' de todos os botões
+    if (singleModeBtn)   singleModeBtn.classList.remove('active');
+    if (multiModeBtn)    multiModeBtn.classList.remove('active');
+    if (playlistModeBtn) playlistModeBtn.classList.remove('active');
+
     if (mode === 'single') {
         if (singleInputMode) singleInputMode.classList.remove('hidden');
-        if (multiInputMode) multiInputMode.classList.add('hidden');
-        if (singleModeBtn) singleModeBtn.classList.add('active');
-        if (multiModeBtn) multiModeBtn.classList.remove('active');
-        console.log('✅ Modo Single ativado');
-    } else {
-        if (singleInputMode) singleInputMode.classList.add('hidden');
+        if (singleModeBtn)   singleModeBtn.classList.add('active');
+    } else if (mode === 'multi') {
         if (multiInputMode) multiInputMode.classList.remove('hidden');
-        if (singleModeBtn) singleModeBtn.classList.remove('active');
-        if (multiModeBtn) multiModeBtn.classList.add('active');
-        console.log('✅ Modo Multi ativado');
+        if (multiModeBtn)   multiModeBtn.classList.add('active');
+    } else if (mode === 'playlist') {
+        if (playlistInputMode) playlistInputMode.classList.remove('hidden');
+        if (playlistModeBtn)   playlistModeBtn.classList.add('active');
+        // Focar no input de playlist
+        setTimeout(() => playlistUrlInput && playlistUrlInput.focus(), 100);
     }
 }
 
