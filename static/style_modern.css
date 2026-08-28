@@ -370,7 +370,8 @@ body::after {
     gap: 0.75rem;
 }
 
-#youtube-url {
+#youtube-url,
+#playlist-url {
     flex: 1;
     padding: 12px 16px;
     background: rgba(4,0,10,0.9);
@@ -384,14 +385,16 @@ body::after {
     caret-color: var(--neon-pink);
 }
 
-#youtube-url:focus {
+#youtube-url:focus,
+#playlist-url:focus {
     outline: none;
     border-color: var(--neon-cyan);
     box-shadow: var(--glow-cyan);
     background: rgba(0,245,255,0.03);
 }
 
-#youtube-url::placeholder {
+#youtube-url::placeholder,
+#playlist-url::placeholder {
     color: var(--text-tertiary);
     font-family: 'VT323', monospace;
 }
